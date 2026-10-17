@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Firefox extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
+  "license": "MIT",
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",

@@ -114,3 +114,10 @@ Layout:
 Dictionary: [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict),
 CC BY-SA 4.0. HSK 3.0 word lists:
 [complete-hsk-vocabulary](https://github.com/drkameleon/complete-hsk-vocabulary) (MIT). Pinyin for the pinyin mode: [pinyin-pro](https://github.com/zh-lx/pinyin-pro) (MIT).
+
+## License
+
+The code is under the [MIT License](LICENSE). The dictionary and word-list
+data the build downloads keep their own licenses: CC-CEDICT is CC BY-SA 4.0
+and complete-hsk-vocabulary is MIT. Their notices ship with the extension in
+`extension/data/`.
