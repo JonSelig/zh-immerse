@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Basic fixture</title>
+  <style>
+    body { font: 17px/1.6 Georgia, serif; max-width: 720px; margin: 32px auto; padding: 0 16px; }
+    nav a { margin-right: 12px; }
+    .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
+    table { border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <nav id="nav"><a href="#a">Home</a><a href="#b">Getting started</a><a href="#c">Contact us</a></nav>
+
+  <h1 id="title">Learning a language through immersion</h1>
+
+  <p id="plain">The weather is nice today, so we are going for a walk in the park.</p>
+
+  <p id="formatted">Reading every day is <b>the most important</b> habit, and it gets <em>easier</em> over time.</p>
+
+  <p id="linked">Please read the <a id="doclink" href="#docs">installation guide</a> before you install the package.</p>
+
+  <ul id="list">
+    <li>Practice speaking with friends</li>
+    <li>Watch movies with subtitles</li>
+    <li>Write a short diary entry</li>
+  </ul>
+
+  <div class="card" id="card">
+    <h3>Subscribe to our newsletter</h3>
+    <p>Get one useful tip in your inbox each week.</p>
+    <button id="btn">Sign up now</button>
+  </div>
+
+  <p id="address">221B Baker Street<br>London, United Kingdom<br>Open every weekday</p>
+
+  <table id="table">
+    <tr><th>Word</th><th>Meaning</th></tr>
+    <tr><td>apple</td><td>a round fruit with red or green skin</td></tr>
+  </table>
+
+  <h2>Things that must stay in English</h2>
+  <pre id="pre">npm install --save-dev web-ext</pre>
+  <p id="inlinecode">Run <code>npm run build</code> to compile the project.</p>
+  <input id="input" value="Typed text stays" placeholder="Search the site">
+  <textarea id="textarea">Text in a textarea stays too</textarea>
+  <div id="editable" contenteditable="true">This editable box is left alone</div>
+  <p id="notranslate" translate="no">Brand Name Do Not Translate</p>
+  <p id="chinese">这一段本来就是中文，不需要翻译。</p>
+  <p id="url">https://example.com/some/path</p>
+
+  <details id="details"><summary>Show more details</summary><p>Hidden content becomes visible when you open this.</p></details>
+</body>
+</html>

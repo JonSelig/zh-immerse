@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word list · zh-immerse</title>
+  <link rel="stylesheet" href="vocab.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Word list <span class="zh">词汇</span></h1>
+      <p id="summary" class="muted"></p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="lookups" aria-selected="true">Looked up <span id="countLookups" class="pill">0</span></button>
+      <button role="tab" data-tab="saved" aria-selected="false">Saved <span id="countSaved" class="pill">0</span></button>
+    </nav>
+
+    <section class="toolbar">
+      <input id="query" type="search" placeholder="Search word, pinyin or meaning" aria-label="Search">
+      <label>Sort
+        <select id="sort">
+          <option value="count">Most looked up</option>
+          <option value="recent">Most recent</option>
+          <option value="first">Newest words</option>
+        </select>
+      </label>
+      <label>At least
+        <input id="minCount" type="number" min="1" value="1" aria-label="Minimum lookups"> ×
+      </label>
+      <label>Seen in
+        <select id="since">
+          <option value="0">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="365">Last year</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button id="exportTsv" class="primary">Export for Anki</button>
+      <details class="more">
+        <summary>Backup</summary>
+        <div class="menu">
+          <button id="exportJson">Export backup (JSON)</button>
+          <label class="button">Import backup…<input id="importJson" type="file" accept="application/json,.json" hidden></label>
+        </div>
+      </details>
+    </section>
+
+    <p id="exportNote" class="muted note"></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="star" aria-label="Saved"></th>
+          <th>Word</th>
+          <th>Pinyin</th>
+          <th>Meaning</th>
+          <th class="num">Looked up</th>
+          <th>Last seen</th>
+          <th class="act" aria-label="Delete"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty" hidden></p>
+  </main>
+  <script src="../dist/vocab.js"></script>
+</body>
+</html>

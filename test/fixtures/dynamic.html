@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dynamic fixture</title>
+  <style>
+    body { font: 16px/1.6 system-ui, sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; }
+    .post { border-bottom: 1px solid #ddd; padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>Live feed</h1>
+  <p id="status">Last updated a few seconds ago</p>
+  <p id="framework">Status: <span id="fwtext">Loading your messages</span></p>
+  <button id="add">Load more posts</button>
+  <div id="feed"></div>
+  <div id="sentinel" style="height: 1px"></div>
+
+  <script>
+    const sentences = [
+      'A new coffee shop opened near the station this morning.',
+      'Scientists found a faster way to recycle plastic bottles.',
+      'The library will stay open late during exam week.',
+      'Our team shipped the update after three weeks of testing.',
+      'Remember to drink water and take short breaks.',
+      'The museum is offering free tickets to students on Friday.',
+    ];
+    let n = 0;
+    function addPost() {
+      const div = document.createElement('div');
+      div.className = 'post';
+      div.innerHTML = `<strong>Post ${n + 1}</strong><p>${sentences[n % sentences.length]}</p>`;
+      document.getElementById('feed').append(div);
+      n++;
+    }
+    for (let i = 0; i < 4; i++) addPost();
+    document.getElementById('add').addEventListener('click', () => { for (let i = 0; i < 3; i++) addPost(); });
+
+    // Infinite scroll
+    new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && n < 60) for (let i = 0; i < 5; i++) addPost();
+    }).observe(document.getElementById('sentinel'));
+
+    // A counter that rewrites its text (characterData change on the same node)
+    let seconds = 0;
+    const statusNode = document.getElementById('status').firstChild;
+    setInterval(() => { seconds += 2; statusNode.data = `Last updated ${seconds} seconds ago`; }, 2000);
+
+    // Framework-style update: keeps its own reference to the text node and
+    // sets its data, then later removes it with removeChild (like React does).
+    const fwNode = document.getElementById('fwtext').firstChild;
+    window.frameworkSet = (text) => { fwNode.data = text; };
+    window.frameworkRemove = () => { fwNode.parentNode.removeChild(fwNode); return 'removed ok'; };
+    setTimeout(() => window.frameworkSet('You have three unread messages'), 3000);
+  </script>
+</body>
+</html>

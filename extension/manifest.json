@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "zh-immerse",
+  "version": "0.1.2",
+  "description": "Shows English web pages in Simplified Chinese (on-device, via Apple Translation), with pinyin, a hover dictionary and a word list of what you look up.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{a202aa0b-ba2f-4990-8706-9e11d43be832}",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  },
+  "icons": { "48": "icons/icon.svg", "96": "icons/icon.svg" },
+  "permissions": ["storage", "unlimitedStorage", "nativeMessaging"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "scripts": ["dist/background.js"] },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "zh-immerse",
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon.svg"
+  },
+  "commands": {
+    "toggle-page": {
+      "suggested_key": { "default": "Alt+Shift+Z" },
+      "description": "Switch this page between Chinese and the original English"
+    },
+    "toggle-pinyin": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Show or hide pinyin above characters"
+    }
+  }
+}

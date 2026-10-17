@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>zh-immerse</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <span class="logo">中</span>
+    <div>
+      <div class="name">zh-immerse</div>
+      <div class="sub">沉浸式中文阅读</div>
+    </div>
+  </header>
+
+  <div id="status" class="status" hidden></div>
+
+  <section class="level">
+    <div class="level-head">
+      <span>Level</span>
+      <span id="levelHint" class="muted"></span>
+    </div>
+    <div id="levels" class="segmented" role="radiogroup" aria-label="Reading level">
+      <button role="radio" data-level="1">1</button>
+      <button role="radio" data-level="2">2</button>
+      <button role="radio" data-level="3">3</button>
+      <button role="radio" data-level="4">4</button>
+      <button role="radio" data-level="5">5</button>
+      <button role="radio" data-level="6">6</button>
+      <button role="radio" data-level="7" title="Translate everything">全部</button>
+    </div>
+  </section>
+
+  <section class="toggles">
+    <label class="row">
+      <span>Translate pages</span>
+      <input type="checkbox" id="enabled" class="switch">
+    </label>
+    <label class="row">
+      <span>On <b id="site">this site</b></span>
+      <input type="checkbox" id="siteEnabled" class="switch">
+    </label>
+    <label class="row">
+      <span>Pinyin above characters <kbd>⌥⇧P</kbd></span>
+      <input type="checkbox" id="pinyin" class="switch">
+    </label>
+  </section>
+
+  <button id="togglePage" class="wide" hidden>Show English on this tab <kbd>⌥⇧Z</kbd></button>
+
+  <section class="words">
+    <div id="wordStats" class="muted">No words looked up yet</div>
+    <button id="openVocab" class="wide primary">Open word list</button>
+  </section>
+
+  <script src="../dist/popup.js"></script>
+</body>
+</html>

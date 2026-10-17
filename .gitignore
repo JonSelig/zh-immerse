@@ -1,0 +1,12 @@
+node_modules/
+native-host/build/
+extension/dist/
+extension/data/cedict.txt
+extension/data/hsk-words.txt
+data-src/
+web-ext-artifacts/
+.DS_Store
+
+# Local tooling
+.claude/
+.amo-upload-uuid

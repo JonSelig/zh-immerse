@@ -1,0 +1,5 @@
+cedict.txt is derived from CC-CEDICT (https://www.mdbg.net/chinese/dictionary?page=cc-cedict),
+a community-maintained Chinese-English dictionary, licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (https://creativecommons.org/licenses/by-sa/4.0/).
+It was reformatted by scripts/build-dict.mjs (one tab-separated line per reading, cross-references
+rendered with tone marks); the content is otherwise unchanged and is shared under the same license.

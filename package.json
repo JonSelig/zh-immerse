@@ -1,0 +1,32 @@
+{
+  "name": "zh-immerse",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "description": "Firefox extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "build:dict": "node scripts/build-dict.mjs",
+    "build:host": "native-host/build.sh",
+    "install:host": "native-host/install.sh",
+    "test:host": "node test/host-smoke.mjs",
+    "test": "node --test test/unit/",
+    "lint": "web-ext lint --source-dir extension",
+    "start": "web-ext run --source-dir extension --start-url https://en.wikipedia.org/wiki/Language_immersion",
+    "harness": "node test/harness/server.mjs",
+    "sign": "web-ext sign --source-dir extension --channel unlisted",
+    "prestart": "npm run build",
+    "presign": "node scripts/bump-version.mjs && npm run build",
+    "prelint": "npm run build",
+    "bump": "node scripts/bump-version.mjs",
+    "build:hsk": "node scripts/build-hsk.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "web-ext": "^10.8.0"
+  },
+  "dependencies": {
+    "pinyin-pro": "^3.29.5"
+  }
+}
