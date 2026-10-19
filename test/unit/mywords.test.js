@@ -16,6 +16,7 @@ const DICT = new Map([
   ['喜欢', [{ pinyin: 'xi3 huan5', defs: 'to like; to be fond of' }]],
   ['他的', [{ pinyin: 'ta1 de5', defs: 'his' }]],
   ['中国人', [{ pinyin: 'Zhong1 guo2 ren2', defs: 'Chinese person' }]],
+  ['西安', [{ pinyin: 'Xi1 an1', defs: "Xi'an, capital of Shaanxi" }, { pinyin: 'xi1 an4', defs: 'made-up second reading' }]],
 ]);
 const entriesFor = (zh) => DICT.get(zh) ?? [];
 const keysFor = (map, zh) => [...map].filter(([, list]) => list.some((c) => c.zh === zh)).map(([en]) => en).sort();
@@ -78,6 +79,7 @@ test('readingEntries keeps the dictionary entries for the card pronunciation', (
   assert.deepEqual(readingEntries(zh, 'zhóng').map((e) => e.pinyin), ['zhong1', 'zhong4', 'Zhong1']); // no match: all
   assert.equal(readingEntries(DICT.get('他的'), 'tāde').length, 1); // neutral tone, no space
   assert.equal(readingEntries(DICT.get('中国人'), 'Zhōngguó rén').length, 1);
+  assert.deepEqual(readingEntries(DICT.get('西安'), 'Xī’ān').map((e) => e.pinyin), ['Xi1 an1']);
 });
 
 test('buildMyWordMap: card English plus every meaning of the card pronunciation', () => {

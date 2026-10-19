@@ -75,7 +75,7 @@ export const removeWord = (list, zh) => list.filter((w) => w.zh !== zh);
 
 export const editWord = (list, zh, en) => list.map((w) => (w.zh === zh ? { ...w, en: text(en) } : w));
 
-const normPinyin = (pinyin) => toMarks(pinyin).normalize('NFC').toLowerCase().replace(/[\s''·-]/g, '');
+const normPinyin = (pinyin) => toMarks(pinyin).normalize('NFC').toLowerCase().replace(/[\s'’'·-]/g, '');
 
 /**
  * CC-CEDICT entries for the card's pronunciation ("zhōng" or "zhong1").
