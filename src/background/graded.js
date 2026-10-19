@@ -1,9 +1,13 @@
-// Graded reading (levels 1–6): turns full translations into sentences where
-// only HSK words up to the level are swapped into Chinese. See shared/diglot.js.
+// Graded reading (levels 0–6): turns full translations into sentences where
+// only some words are swapped into Chinese: HSK words up to the level (1–6),
+// or the user's own words (0, My words). See shared/diglot.js.
 
-import { parseWordMap, diglotItem } from '../shared/diglot.js';
+import { parseWordMap, diglotItem, MY_LEVEL } from '../shared/diglot.js';
+import { buildMyWordMap } from '../shared/mywords.js';
+import { dictionary } from './dictionary.js';
 
 let loading = null;
+let mine = null; // My words map; rebuilt after the list changes
 
 function load() {
   loading ??= fetch(browser.runtime.getURL('data/hsk-words.txt'))
@@ -13,8 +17,19 @@ function load() {
   return loading;
 }
 
+function loadMine() {
+  mine ??= Promise.all([browser.storage.local.get({ myWords: [] }), dictionary()])
+    .then(([{ myWords }, dict]) => buildMyWordMap(myWords, (zh) => dict.get(zh) ?? []))
+    .catch((err) => { mine = null; throw err; });
+  return mine;
+}
+
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && 'myWords' in changes) mine = null;
+});
+
 /** items/translations as sent to and returned by the translator. */
 export async function gradeItems(items, translations, level) {
-  const map = await load();
+  const map = await (level === MY_LEVEL ? loadMine() : load());
   return items.map((item, i) => (translations[i] == null ? null : diglotItem(item, translations[i], map, level)));
 }
