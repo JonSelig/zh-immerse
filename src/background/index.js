@@ -18,12 +18,21 @@ const wordInfo = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs,
 // word saved there keeps no example sentence or address.
 const isPrivate = (sender) => !!sender?.tab?.incognito;
 
+/** Hostname of the tab a message came from: the translation cache partition. */
+function siteOf(sender) {
+  try {
+    return new URL(sender?.tab?.url ?? sender?.url).hostname;
+  } catch {
+    return '';
+  }
+}
+
 const EXTENSION_BASE = browser.runtime.getURL('');
 
 const handlers = {
   async translate({ items, level = FULL_LEVEL }, sender) {
     try {
-      const translations = await translateItems(items, { persist: !isPrivate(sender) });
+      const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender) });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };
     } catch (err) {

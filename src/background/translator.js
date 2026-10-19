@@ -2,6 +2,10 @@
 // batched requests to the native host. Identical texts requested while a
 // translation is in flight share one request. The IndexedDB cache holds the
 // text of pages the user has read, so it is capped and can be cleared.
+//
+// Both caches are kept per site. With one shared cache, a page could insert
+// another site's exact text and time how fast it turns into Chinese: a cache
+// hit would show the user had read that text before.
 
 import { request } from './native.js';
 import * as db from './db.js';
@@ -20,7 +24,7 @@ let inFlight = 0;
 let flushTimer = null;
 let writesSincePrune = PRUNE_EVERY;
 
-const keyOf = (item) => (typeof item === 'string' ? item : JSON.stringify(item));
+const keyOf = (site, item) => `${site}\n${typeof item === 'string' ? item : JSON.stringify(item)}`;
 
 function remember(key, value) {
   memory.delete(key);
@@ -31,11 +35,12 @@ function remember(key, value) {
 /**
  * Translates items (strings or segment arrays). Resolves with one result per
  * item; null where the host could not translate. Rejects (with err.code) when
- * the host itself is unavailable. With persist: false (private windows), new
- * translations aren't kept in either cache.
+ * the host itself is unavailable. `site` is the hostname of the tab asking,
+ * which selects the cache partition. With persist: false (private windows),
+ * new translations aren't kept in either cache.
  */
-export async function translateItems(items, { persist = true } = {}) {
-  const keys = items.map(keyOf);
+export async function translateItems(items, { site = '', persist = true } = {}) {
+  const keys = items.map((item) => keyOf(site, item));
   const results = new Array(items.length).fill(null);
   const misses = [];
   keys.forEach((key, i) => {

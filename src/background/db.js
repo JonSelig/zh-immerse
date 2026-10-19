@@ -1,5 +1,5 @@
 // Minimal promise wrapper over the extension's IndexedDB.
-//   translations: { key, value, ts }   key = source text (or JSON of segments),
+//   translations: { key, value, ts }   key = site + "\n" + source text (or JSON of segments),
 //                 index "ts" (write time, for dropping the oldest rows)
 //   words:        lookup-history records (see shared/history.js), key = word
 
