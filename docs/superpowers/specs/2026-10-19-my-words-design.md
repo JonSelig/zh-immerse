@@ -70,20 +70,23 @@ This is a new extension page, separate from the lookup-history word list
 `browser.storage.local` key `myWords`:
 
 ```js
-[{ zh: '住', en: 'to live', source: 'Chinese 1' }, ...]
+[{ zh: '住', pinyin: 'zhù', en: 'to live', source: 'Chinese 1' }, ...]
 ```
 
 - `zh` is unique. Words are stored in the order they were added.
 - `source` is the deck name (from the `decks` table, or from `col.decks` in
   older files, choosing the deck that holds most of the imported cards).
   Words added by hand get `source: ''`.
+- `pinyin` is the card's pronunciation, as written on the card (tone marks or
+  tone numbers). It selects which dictionary meanings count (see Swapping).
+  Words added by hand get `pinyin: ''`, which means every pronunciation.
 - Rough size: 217 words take about 10 KB, well within storage limits.
 
 Writes go through the background script. A new message, `setMyWords
 { words }`, replaces the whole list and is accepted only from extension pages
 (add it to `src/background/guard.js` beside `importWords`). It validates every
-record with `cleanMyWord`: `zh` must be 1–16 Han characters; `en` and `source`
-must be strings and are trimmed to 200 characters; there is a 20,000-word
+record with `cleanMyWord`: `zh` must be 1–16 Han characters; `en`, `pinyin`
+and `source` must be strings and are trimmed to 200 characters; there is a 20,000-word
 limit. Reads use `browser.storage.local.get('myWords')` directly, the same way
 settings are read.
 
@@ -91,7 +94,7 @@ The pure list operations go in `src/shared/mywords.js`:
 
 - `mergeWords(list, incoming, mode)`, where `mode` is `'add'` or `'replace'`.
   It returns `{ words, added, existing }`.
-  - In `'add'` mode, an existing word keeps its English and source.
+  - In `'add'` mode, an existing word keeps its English, pinyin and source.
   - Words you removed come back if their deck is imported again with Add.
     This is expected.
 - `addWord(list, { zh, en })`, `removeWord(list, zh)`, `editWord(list, zh,
@@ -137,7 +140,7 @@ version".
     It doesn't use indexes, because full scans of a few hundred rows are
     instant.
 - **`src/shared/anki.js`**: `readApkg(arrayBuffer) -> { deck, words: [{ zh,
-  en }], skipped: [string] }`.
+  pinyin, en }], skipped: [string] }`.
   - **Field names**: from the `fields` table (`ntid, ord, name`) when it
     exists, otherwise from `col.models` JSON (`flds[].name` by `ord`).
   - **Chinese field**: the first field whose name matches
@@ -146,7 +149,9 @@ version".
     mostly Han characters.
   - **English field**: the first field whose name matches
     `/^(meaning|english|definition|translation|back|gloss)$/i`. Otherwise
-    it's empty, and English for swapping comes from HSK data alone.
+    it's empty, and English for swapping comes from CC-CEDICT alone.
+  - **Pinyin field**: the first field whose name matches `/^pinyin$/i`.
+    Otherwise it's empty (all pronunciations).
   - **Cleaning field values**: strip HTML tags, decode entities (`&#x27;`,
     `&amp;`, `&nbsp;`, …), remove `[sound:…]` and trim. From the Chinese, keep
     the first run of Han characters (`/\p{Script=Han}+/u`).
@@ -160,13 +165,39 @@ version".
 
 - When `level === 0`, it builds (and caches) a word map from `myWords` with
   the same structure as the HSK map: lowercase English → `[{ zh, level: 0 }]`.
-  It has two sources:
-  1. Each word's `en`, split on `;` `,` `/`, then cleaned with the same
-     `cleanGloss` rules as `scripts/build-hsk.mjs`. Move `cleanGloss` and the
-     `STOP` set to `src/shared/gloss.js` so both can use them. Keep only
-     glosses matching `^[a-z]+(?:[ -][a-z]+){0,2}$` that aren't in `STOP`.
-  2. Every English key in the HSK map whose candidates include one of your
-     words.
+- **A word stands for every meaning you could know it by, not only what the
+  card lists.** Cards list the meanings that were drilled, not everything
+  you've learned. Each word's English comes from two sources:
+  1. **The card's `en`.**
+  2. **Every CC-CEDICT definition for the card's pronunciation.**
+     - **Matching the pronunciation:** convert each CC-CEDICT entry's pinyin
+       with `toMarks()` (`zhong1` → `zhōng`). Then compare it with the card's
+       `pinyin` after normalizing both: run the card's pinyin through
+       `toMarks()` too (in case it uses tone numbers), lowercase, NFC, and
+       remove spaces, apostrophes and hyphens.
+     - **Example:** 中 with card pinyin `zhōng` gets within, among, in,
+       middle, center, while, during, plus the `Zhong1` entry (China,
+       Chinese). It does **not** get the `zhong4` meanings (hit, be struck
+       by, win).
+     - **No card pinyin, or no entry matches** (e.g. a typo, or erhua spelled
+       differently): use every CC-CEDICT entry for the word.
+- **Cleaning the English:** split both sources on `;` `,` `/`. Drop CC-CEDICT
+  definitions matching `SKIP_MEANING` (surname, variant of, classifier, …),
+  then clean them with the same `cleanGloss` rules as
+  `scripts/build-hsk.mjs`. Move `cleanGloss`, `STOP` and `SKIP_MEANING` to
+  `src/shared/gloss.js` so both can use them. Keep only glosses matching
+  `^[a-z]+(?:[ -][a-z]+){0,2}$` that aren't in `STOP`.
+- **No HSK data in this mode:** it is not used for My words, because it
+  doesn't record pronunciation (it would bring "hit" back for 中). CC-CEDICT
+  covers the same meanings.
+- **Editing a word's English adds to these meanings; it can't remove
+  dictionary meanings.** To keep a word from being swapped, remove it.
+- **Where it runs:** the dictionary is already loaded in the background for
+  hover lookups. `src/background/dictionary.js` exports `entries(word)` for
+  `graded.js` to use.
+- **Wrong senses are still filtered:** a meaning is used only where the
+  Chinese also appears in Apple's translation of the sentence. Like the HSK
+  levels, this allows correct but awkward swaps ("中 the meeting").
 - The cached map is cleared on `browser.storage.onChanged` for `myWords`.
 - `diglotItem(item, translation, map, 0)` then works unchanged, since every
   candidate has `level: 0 <= 0`. The translation check still applies.
@@ -211,7 +242,11 @@ Unit tests (`node --test 'test/unit/*.test.js'`):
   - `cleanMyWord` validation;
   - building the word map;
   - `findSwaps` at level 0 swapping only list words, e.g. "I live in a big
-    house" with 住 and 大 in the list.
+    house" with 住 and 大 in the list;
+  - reading filter: 中 with card pinyin `zhōng` maps "middle", "among" and
+    "during" but not "hit"; with empty pinyin it also maps "hit"; card pinyin
+    in tone numbers (`zhong1`) and multi-syllable words (`zhōngguó`, `tāde`
+    vs `ta1 de5`) match.
 
 One-off check (not committed): run `readApkg` against
 `~/chinese_study/build/chinese1.apkg` and `~/Documents/Chinese 1.apkg`. Both
@@ -239,7 +274,8 @@ New:
 
 Changed:
 
-- `src/background/graded.js`, `src/background/index.js` (`setMyWords`; the
+- `src/background/graded.js`, `src/background/dictionary.js` (`entries`),
+  `src/background/index.js` (`setMyWords`; the
   add form and the pinyin column use the existing `lookup` message),
   `src/background/guard.js` (`setMyWords` in `PAGE_ONLY`)
 - `src/shared/diglot.js`, `src/shared/settings.js` (comment)
