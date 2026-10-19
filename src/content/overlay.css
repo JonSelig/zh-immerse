@@ -63,6 +63,8 @@
 .zhi-pop .zhi-t3 { color: var(--zhi-t3); }
 .zhi-pop .zhi-t4 { color: var(--zhi-t4); }
 .zhi-pop .zhi-t5 { color: var(--zhi-t5); }
+.zhi-pop .zhi-pop-replaced { margin: 0 0 6px; color: var(--muted); }
+.zhi-pop .zhi-pop-replaced b { color: var(--fg); font-weight: 600; }
 .zhi-pop .zhi-pop-entry { margin: 2px 0; }
 .zhi-pop .zhi-pop-en {
   margin-top: 8px;

@@ -5,6 +5,7 @@
 import { isCJK, sentenceAround } from '../shared/text.js';
 import { syllables } from '../shared/pinyin.js';
 import { MAX_LOOKUP } from '../shared/dict.js';
+import { replacedAt } from '../shared/diglot.js';
 import { speak, canSpeak } from './speech.js';
 import { createOverlay } from './overlay.js';
 
@@ -162,6 +163,7 @@ export class Hover {
     let zh = hit.node.data;
     let offset = hit.offset;
     let en = '';
+    let replaced = '';
     if (info) {
       const { seg, state } = info;
       const inSeg = nodes.slice(0, index).reduce((n, t) => n + t.data.length, 0) + hit.offset;
@@ -170,11 +172,13 @@ export class Hover {
       zh = state?.zh || seg.zh;
       offset = (segIndex > 0 ? before.slice(0, segIndex).reduce((n, s) => n + s.zh.length, 0) : 0) + inSeg;
       en = state?.en || seg.en;
+      // At graded levels: the English word this Chinese word was swapped in for.
+      replaced = replacedAt(seg.swaps, inSeg);
     }
     // At graded levels the page shows mixed English/Chinese; the example
     // sentence (saved with lookups and read aloud) is the full Chinese.
     const full = info?.state?.full ?? null;
-    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full };
+    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full, replaced };
   }
 
   async lookup(text) {
@@ -249,7 +253,7 @@ export class Hover {
   }
 
   render() {
-    const { match, en } = this.current;
+    const { match, en, replaced } = this.current;
     const state = this.wordState.get(match.word) ?? { count: 0, saved: false };
     const card = this.card;
     card.replaceChildren();
@@ -263,6 +267,11 @@ export class Hover {
     }
     head.append(pinyinNode(match.entries[0].pinyin));
     card.append(head);
+    if (replaced) {
+      const line = el('div', 'zhi-pop-replaced', 'replaces ');
+      line.append(el('b', null, `“${replaced}”`));
+      card.append(line);
+    }
 
     const multi = new Set(match.entries.map((e) => e.pinyin.toLowerCase())).size > 1;
     const list = el('div', 'zhi-pop-entries');
