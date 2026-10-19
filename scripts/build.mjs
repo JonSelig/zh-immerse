@@ -40,6 +40,7 @@ const options = {
     content: 'src/content/index.js',
     popup: 'src/popup/popup.js',
     vocab: 'src/vocab/vocab.js',
+    mywords: 'src/mywords/mywords.js',
   },
   outdir: 'extension/dist',
   loader: { '.css': 'text' }, // src/content/overlay.css is bundled as a string

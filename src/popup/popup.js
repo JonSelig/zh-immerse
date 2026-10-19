@@ -1,5 +1,6 @@
 import { loadSettings } from '../shared/settings.js';
 import { sendMessage, sendToTab } from '../shared/messaging.js';
+import { MY_LEVEL } from '../shared/diglot.js';
 
 const $ = (id) => document.getElementById(id);
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -7,6 +8,7 @@ const ALL_SITES = { origins: ['<all_urls>'] };
 let settings;
 let tab;
 let page = null; // state reported by the tab's content script, if any
+let myCount = 0; // words in My words
 
 /** Small DOM builder: h('b', {}, 'text', child, ...) */
 function h(tag, props = {}, ...children) {
@@ -50,7 +52,11 @@ async function checkStatus() {
   }
 }
 
-const levelHint = (level) => (level >= 7 ? 'Translate everything' : level === 1 ? 'Swap HSK 1 words' : `Swap HSK 1–${level} words`);
+function levelHint(level) {
+  if (level === MY_LEVEL) return myCount ? `Swap my ${myCount} word${myCount === 1 ? '' : 's'}` : 'Import or add words first';
+  if (level >= 7) return 'Translate everything';
+  return level === 1 ? 'Swap HSK 1 words' : `Swap HSK 1–${level} words`;
+}
 
 function render() {
   const site = page?.host;
@@ -59,6 +65,7 @@ function render() {
     b.disabled = !settings.enabled;
   }
   $('levelHint').textContent = levelHint(settings.level);
+  $('editMyWords').hidden = settings.level !== MY_LEVEL;
   $('enabled').checked = settings.enabled;
   $('pinyin').checked = settings.pinyin;
   $('site').textContent = site || 'this site';
@@ -81,6 +88,8 @@ async function refreshWords() {
 
 async function init() {
   settings = await loadSettings();
+  const { myWords = [] } = await browser.storage.local.get('myWords');
+  myCount = myWords.length;
   [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   page = await sendToTab(tab.id, { type: 'pageState' }).catch(() => null);
   render();
@@ -102,6 +111,10 @@ async function init() {
   });
   $('openVocab').addEventListener('click', () => {
     browser.tabs.create({ url: browser.runtime.getURL('vocab/vocab.html') });
+    window.close();
+  });
+  $('editMyWords').addEventListener('click', () => {
+    browser.tabs.create({ url: browser.runtime.getURL('mywords/mywords.html') });
     window.close();
   });
 }

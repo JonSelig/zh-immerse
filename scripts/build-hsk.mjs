@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STOP, SKIP_MEANING, GLOSS, cleanGloss } from '../src/shared/gloss.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(root, 'extension/data/hsk-words.txt');
@@ -24,22 +25,6 @@ const output = resolve(root, 'extension/data/hsk-words.txt');
 // Pronouns, prepositions, particles, conjunctions and most adverbs make
 // mixed sentences ungrammatical rather than readable.
 const POS = new Set(['n', 'v', 'vn', 'a', 'an', 'ad', 'b', 't', 's', 'f', 'm', 'ns', 'nz', 'nr', 'l', 'g', 'qt']);
-const STOP = new Set(`a an the to of in on at by for with from and or but not no yes it its this that these
-those he she they we you i me him her them us my your his our their is am are was were be been
-being do does did have has had will would can could should may might must shall if so as than then
-there here what which who whom whose when where why how all any some very just also too up down
-out about into over after before again more most other such only own same few each both many much
-one ok okay well get got make let`.split(/\s+/));
-const SKIP_MEANING = /surname|variant of|abbr\.|used in|classifier|old name|archaic|dialect|literary|Taiwan pr/i;
-
-function cleanGloss(gloss) {
-  return gloss
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\b(sth|sb|one's|oneself|someone|something)\b/g, ' ')
-    .replace(/^\s*(to|a|an|the)\s+/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 const candidates = new Map(); // english -> Map(zh -> { level, rank })
 let words = 0;
@@ -52,7 +37,7 @@ for (let level = 1; level <= 6; level++) {
         if (SKIP_MEANING.test(meaning)) continue;
         for (const gloss of meaning.split(/[;,]/)) {
           const en = cleanGloss(gloss).toLowerCase();
-          if (!/^[a-z]+(?:[ -][a-z]+){0,2}$/.test(en) || STOP.has(en)) continue;
+          if (!GLOSS.test(en) || STOP.has(en)) continue;
           if (!candidates.has(en)) candidates.set(en, new Map());
           const known = candidates.get(en).get(w.s);
           if (!known || level < known.level) candidates.get(en).set(w.s, { level, rank: w.q ?? 1e9 });

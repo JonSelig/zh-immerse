@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My words · zh-immerse</title>
+  <link rel="stylesheet" href="../vocab/vocab.css">
+  <link rel="stylesheet" href="mywords.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>My words <span class="zh">我的词</span></h1>
+      <p class="muted">Choose <b>我的</b> in the toolbar popup to swap only these words into Chinese.</p>
+    </header>
+
+    <section class="panel">
+      <h2>Import an Anki deck</h2>
+      <div class="line">
+        <label class="button primary">Import Anki deck (.apkg)…<input id="importApkg" type="file" accept=".apkg" hidden></label>
+        <label><input type="radio" name="mode" value="add" checked> Add to my words</label>
+        <label><input type="radio" name="mode" value="replace"> Replace my words</label>
+      </div>
+      <p id="importNote" class="muted note"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Add a word</h2>
+      <form id="addForm" class="line">
+        <input id="addZh" placeholder="Chinese, e.g. 咖啡" aria-label="Chinese" autocomplete="off">
+        <span id="addPinyin" class="py"></span>
+        <input id="addEn" placeholder="English" aria-label="English" autocomplete="off">
+        <button class="primary">Add</button>
+      </form>
+      <p id="addNote" class="muted note"></p>
+    </section>
+
+    <section class="toolbar">
+      <input id="query" type="search" placeholder="Search word, pinyin or meaning" aria-label="Search">
+      <span id="count" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="removeAll">Remove all…</button>
+    </section>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Word</th>
+          <th>Pinyin</th>
+          <th>English <span class="muted">(click to edit)</span></th>
+          <th>From</th>
+          <th class="act" aria-label="Remove"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty" hidden></p>
+  </main>
+  <script src="../dist/mywords.js"></script>
+</body>
+</html>

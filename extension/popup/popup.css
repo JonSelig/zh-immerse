@@ -74,7 +74,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .level { margin-bottom: 12px; }
 .level-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .level-head span:first-child { font-weight: 600; }
-.segmented { display: grid; grid-template-columns: repeat(6, 1fr) 1.6fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.segmented { display: grid; grid-template-columns: 1.6fr repeat(6, 1fr) 1.6fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .segmented button {
   border: 0; border-radius: 0; border-left: 1px solid var(--line); padding: 6px 0;
   font-variant-numeric: tabular-nums;
@@ -83,3 +83,6 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .segmented button:hover { background: var(--line); }
 .segmented button[aria-checked="true"] { background: var(--accent); color: #fff; }
 .segmented:has(button:disabled) { opacity: .45; }
+
+button.link { border: 0; padding: 6px 0 0; color: var(--accent); }
+button.link:hover { text-decoration: underline; }

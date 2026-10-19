@@ -8,7 +8,8 @@ const content = { url: 'https://example.com/article', tab: { id: 2 } };
 
 test('history and cache handlers only answer extension pages', () => {
   for (const type of PAGE_ONLY) {
-    assert.equal(refusal({ type }, page, BASE), null, type);
+    const msg = type === 'setMyWords' ? { type, words: [] } : { type };
+    assert.equal(refusal(msg, page, BASE), null, type);
     assert.match(refusal({ type }, content, BASE), /extension pages/, type);
     assert.match(refusal({ type }, {}, BASE), /extension pages/, type);
     // A web page whose address merely contains the extension URL doesn't count.
@@ -27,4 +28,12 @@ test('translate and lookup messages are size-checked', () => {
   assert.equal(refusal({ type: 'lookup', text: '喜欢你们' }, content, BASE), null);
   assert.match(refusal({ type: 'lookup', text: '喜'.repeat(100) }, content, BASE), /lookup/);
   assert.match(refusal({ type: 'lookup', text: 5 }, content, BASE), /lookup/);
+});
+
+test('setMyWords is page-only and size-checked', () => {
+  assert.ok(PAGE_ONLY.has('setMyWords'));
+  assert.match(refusal({ type: 'setMyWords', words: [] }, content, BASE), /extension pages/);
+  assert.equal(refusal({ type: 'setMyWords', words: [{ zh: '中' }] }, page, BASE), null);
+  assert.match(refusal({ type: 'setMyWords', words: 'all' }, page, BASE), /word list/);
+  assert.match(refusal({ type: 'setMyWords', words: new Array(20_001).fill({}) }, page, BASE), /word list/);
 });
