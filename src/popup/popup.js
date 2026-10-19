@@ -1,4 +1,5 @@
 import { loadSettings } from '../shared/settings.js';
+import { sendMessage, sendToTab } from '../shared/messaging.js';
 
 const $ = (id) => document.getElementById(id);
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -30,10 +31,10 @@ async function checkStatus() {
     showStatus(['zh-immerse needs access to websites to translate them.', h('br'), grant]);
     return;
   }
-  const host = await browser.runtime.sendMessage({ type: 'hostStatus' });
+  const host = await sendMessage({ type: 'hostStatus' });
   if (host.code === 'hostMissing') {
     showStatus(['The translation helper isn’t installed. In the project folder run ',
-      h('code', {}, 'npm run install:host'), ', then restart Firefox.']);
+      h('code', {}, 'npm run install:host'), ', then restart your browser.']);
   } else if (host.error) {
     showStatus([`Translation helper error: ${host.error}`]);
   } else if (host.status === 'supported') {
@@ -74,14 +75,14 @@ async function save(patch) {
 }
 
 async function refreshWords() {
-  const { lookedUp, saved } = await browser.runtime.sendMessage({ type: 'wordStats' });
+  const { lookedUp, saved } = await sendMessage({ type: 'wordStats' });
   if (lookedUp || saved) $('wordStats').textContent = `${lookedUp} word${lookedUp === 1 ? '' : 's'} looked up · ${saved} saved`;
 }
 
 async function init() {
   settings = await loadSettings();
   [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  page = await browser.tabs.sendMessage(tab.id, { type: 'pageState' }).catch(() => null);
+  page = await sendToTab(tab.id, { type: 'pageState' }).catch(() => null);
   render();
   checkStatus();
   refreshWords();
@@ -96,7 +97,7 @@ async function init() {
     save({ disabledSites: e.target.checked ? others : [...others, page.host] });
   });
   $('togglePage').addEventListener('click', async () => {
-    page = await browser.tabs.sendMessage(tab.id, { type: 'togglePage' });
+    page = await sendToTab(tab.id, { type: 'togglePage' });
     render();
   });
   $('openVocab').addEventListener('click', () => {
