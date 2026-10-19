@@ -1,19 +1,23 @@
 // Minimal promise wrapper over the extension's IndexedDB.
-//   translations: { key, value, ts }   key = source text (or JSON of segments)
+//   translations: { key, value, ts }   key = source text (or JSON of segments),
+//                 index "ts" (write time, for dropping the oldest rows)
 //   words:        lookup-history records (see shared/history.js), key = word
 
 const DB_NAME = 'zh-immerse';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let opening = null;
 
 function open() {
   opening ??= new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = ({ oldVersion }) => {
       const db = req.result;
-      db.createObjectStore('translations', { keyPath: 'key' });
-      db.createObjectStore('words', { keyPath: 'word' });
+      if (oldVersion < 1) {
+        db.createObjectStore('translations', { keyPath: 'key' });
+        db.createObjectStore('words', { keyPath: 'word' });
+      }
+      if (oldVersion < 2) req.transaction.objectStore('translations').createIndex('ts', 'ts');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => { opening = null; reject(req.error); };
@@ -68,4 +72,32 @@ export async function remove(store, key) {
 export async function count(store) {
   const db = await open();
   return done(db.transaction(store).objectStore(store).count());
+}
+
+export async function clear(store) {
+  const db = await open();
+  const tx = db.transaction(store, 'readwrite');
+  tx.objectStore(store).clear();
+  return committed(tx);
+}
+
+/** Deletes the oldest rows (by the "ts" index) beyond `max`; resolves with how many. */
+export async function pruneOldest(store, max) {
+  const db = await open();
+  const tx = db.transaction(store, 'readwrite');
+  const os = tx.objectStore(store);
+  const excess = (await done(os.count())) - max;
+  let removed = 0;
+  if (excess > 0) {
+    const cursor = os.index('ts').openKeyCursor();
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c || removed >= excess) return;
+      os.delete(c.primaryKey);
+      removed++;
+      c.continue();
+    };
+  }
+  await committed(tx);
+  return removed;
 }
