@@ -28,7 +28,9 @@ reading aids are there when a sentence is too hard:
 
 Nothing leaves your machine: translation is on-device, and the dictionary and
 your history are stored locally in the extension. Translations are cached so
-pages you revisit load quickly; the cache keeps the newest 50,000 passages.
+pages you revisit load quickly; the cache is kept separately for each site
+(so one site can't tell what you read on another) and holds the newest 50,000
+passages.
 Saved example sentences keep the page's address without its query string.
 In private windows (if you allow the extension there) nothing is cached or
 counted.
