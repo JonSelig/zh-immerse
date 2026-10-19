@@ -4,8 +4,7 @@ import { PageTranslator } from './translate.js';
 import { Hover } from './hover.js';
 import { SelectionSpeaker } from './selection.js';
 import { DEFAULT_SETTINGS, loadSettings } from '../shared/settings.js';
-
-const send = (msg) => browser.runtime.sendMessage(msg);
+import { onMessage, sendMessage as send } from '../shared/messaging.js';
 
 let settings = { ...DEFAULT_SETTINGS };
 let pageOff = false; // per-tab "show English" toggle (Alt+Shift+Z)
@@ -54,21 +53,21 @@ browser.storage.onChanged.addListener((changes, area) => {
   apply();
 });
 
-browser.runtime.onMessage.addListener((msg) => {
+onMessage((msg) => {
   if (msg?.type === 'togglePage') {
     pageOff = !pageOff;
     lastError = null;
     apply();
   }
   if (msg?.type === 'togglePage' || msg?.type === 'pageState') {
-    return Promise.resolve({
+    return {
       pageOff,
       active: translator.active,
       translated: translator.translatedCount,
       blocked: translator.blocked,
       error: lastError,
       host: location.hostname,
-    });
+    };
   }
   return undefined;
 });

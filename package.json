@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "private": true,
   "type": "module",
-  "description": "Firefox extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
+  "description": "Firefox and Chrome extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build.mjs",

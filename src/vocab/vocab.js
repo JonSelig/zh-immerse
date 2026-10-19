@@ -3,9 +3,9 @@
 
 import { filterWords, sortWords, toAnkiTSV, cleanRecord, pageUrl } from '../shared/history.js';
 import { syllables } from '../shared/pinyin.js';
+import { sendMessage as send } from '../shared/messaging.js';
 
 const $ = (id) => document.getElementById(id);
-const send = (msg) => browser.runtime.sendMessage(msg);
 
 let words = [];
 let tab = 'lookups';

@@ -10,6 +10,7 @@ import * as words from './words.js';
 import { DEFAULT_SETTINGS } from '../shared/settings.js';
 import { pageUrl } from '../shared/history.js';
 import { refusal } from './guard.js';
+import { onMessage, sendToTab } from '../shared/messaging.js';
 
 const wordInfo = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url: pageUrl(url) });
 
@@ -64,7 +65,7 @@ const handlers = {
   clearCache: () => clearCache(),
 };
 
-browser.runtime.onMessage.addListener((msg, sender) => {
+onMessage((msg, sender) => {
   const handler = handlers[msg?.type];
   if (!handler) return undefined;
   const refused = refusal(msg, sender, EXTENSION_BASE);
@@ -80,7 +81,7 @@ async function activeTab() {
 browser.commands.onCommand.addListener(async (command) => {
   if (command === 'toggle-page') {
     const tab = await activeTab();
-    if (tab?.id != null) browser.tabs.sendMessage(tab.id, { type: 'togglePage' }).catch(() => {});
+    if (tab?.id != null) sendToTab(tab.id, { type: 'togglePage' }).catch(() => {});
   } else if (command === 'toggle-pinyin') {
     const { pinyin } = await browser.storage.local.get({ pinyin: DEFAULT_SETTINGS.pinyin });
     await browser.storage.local.set({ pinyin: !pinyin });

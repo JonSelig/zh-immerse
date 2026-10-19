@@ -10,9 +10,14 @@ let voiceLoading = null;
 // robotic; any natural voice (Tingting, Lili, …) is better.
 const NOVELTY = /^(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley)\b/;
 
-/** Best Mandarin (Mainland) voice, preferring enhanced/premium downloads. */
+/**
+ * Best Mandarin (Mainland) voice, preferring enhanced/premium downloads.
+ * Network voices (Chrome lists Google's next to the system ones) are never
+ * used, since they send the text to a server.
+ */
 export function pickVoice(voices) {
   const score = (v) => {
+    if (v.localService === false) return -1;
     let s = 0;
     if (/^zh[-_](CN|Hans)/i.test(v.lang)) s += 10;
     else if (/^zh[-_]TW/i.test(v.lang)) s += 4;
@@ -20,7 +25,6 @@ export function pickVoice(voices) {
     else return -1;
     if (NOVELTY.test(v.name)) s -= 8;
     if (/premium|enhanced|增强|高品质/i.test(v.name)) s += 3;
-    if (v.localService) s += 1;
     return s;
   };
   const ranked = voices.map((v) => [score(v), v]).filter(([s]) => s >= 0).sort((a, b) => b[0] - a[0]);

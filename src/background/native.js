@@ -28,10 +28,14 @@ function connect() {
     });
   });
   p.onDisconnect.addListener((dead) => {
-    // Firefox reports "No such native application zh_immerse" when the host
-    // manifest is missing, and an exit message when the process dies.
-    const message = dead.error?.message ?? 'native host disconnected';
-    const code = /no such native application/i.test(message) ? 'hostMissing' : 'hostDisconnected';
+    // Firefox sets port.error; Chrome sets runtime.lastError during this
+    // callback (reading it also marks it handled). A missing host manifest
+    // reads "No such native application zh_immerse" in Firefox and "Specified
+    // native messaging host not found." in Chrome; "...host is forbidden."
+    // means it's registered for a different extension ID. Either way, running
+    // install:host fixes it.
+    const message = dead.error?.message ?? globalThis.chrome?.runtime?.lastError?.message ?? 'native host disconnected';
+    const code = /no such native application|host not found|host is forbidden/i.test(message) ? 'hostMissing' : 'hostDisconnected';
     for (const id of [...pending.keys()]) settle(id, ({ reject }) => reject(fail(code, message)));
     if (port === dead) port = null;
   });
