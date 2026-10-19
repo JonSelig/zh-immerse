@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { startHost } from '../../scripts/host-client.mjs';
 import { parseDict, longestMatch } from '../../src/shared/dict.js';
 import { parseWordMap, diglotItem, FULL_LEVEL } from '../../src/shared/diglot.js';
-import { shouldCount, applyLookup, applySaved, mergeRecords, isRecord } from '../../src/shared/history.js';
+import { shouldCount, applyLookup, applySaved, mergeRecords, cleanRecord, pageUrl } from '../../src/shared/history.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const port = Number(process.argv[2] ?? 8787);
@@ -65,7 +65,7 @@ async function translate(items, level = FULL_LEVEL) {
 const dict = parseDict(await readFile(resolve(root, 'extension/data/cedict.txt'), 'utf8'));
 const words = new Map();
 const recent = new Map();
-const pick = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url });
+const pick = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url: pageUrl(url) });
 
 const api = {
   translate: ({ items, level }) => translate(items, level),
@@ -92,12 +92,13 @@ const api = {
   listWords: () => [...words.values()],
   deleteWord: ({ word }) => { words.delete(word); return null; },
   importWords({ records }) {
-    const valid = records.filter(isRecord);
+    const valid = records.map(cleanRecord).filter(Boolean);
     for (const r of valid) words.set(r.word, mergeRecords(words.get(r.word), r));
     return { imported: valid.length, skipped: records.length - valid.length };
   },
   wordStats: () => ({ lookedUp: [...words.values()].filter((w) => w.count > 0).length, saved: [...words.values()].filter((w) => w.saved).length }),
   hostStatus: () => ({ status: 'installed', mock: !host }),
+  clearCache: () => null,
 };
 
 // ---- HTTP ---------------------------------------------------------------

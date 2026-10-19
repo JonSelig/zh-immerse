@@ -89,6 +89,47 @@ export function isRecord(r) {
 }
 
 /**
+ * The page address kept with an example: origin and path only, since query
+ * strings and fragments can carry tokens. '' for anything but http(s).
+ */
+export function pageUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin + u.pathname : '';
+  } catch {
+    return '';
+  }
+}
+
+const MAX_WORD = 32;
+const MAX_TEXT = 2000;
+const str = (s, max = MAX_TEXT) => (typeof s === 'string' ? s.slice(0, max) : '');
+const num = (n, fallback = 0) => (Number.isFinite(n) ? n : fallback);
+
+/**
+ * A record from an imported backup, rebuilt from known fields with the right
+ * types, or null if it isn't usable. Backups are files from anywhere, and the
+ * word list renders every field.
+ */
+export function cleanRecord(r) {
+  if (!isRecord(r) || r.word.length > MAX_WORD) return null;
+  const examples = r.examples
+    .filter((e) => e && typeof e.zh === 'string' && e.zh)
+    .slice(0, MAX_EXAMPLES)
+    .map((e) => ({ zh: str(e.zh), en: str(e.en), url: pageUrl(e.url), ts: num(e.ts, r.lastSeen) }));
+  return {
+    word: r.word,
+    pinyin: str(r.pinyin),
+    defs: str(r.defs),
+    count: Math.max(0, Math.floor(r.count)),
+    firstSeen: r.firstSeen,
+    lastSeen: r.lastSeen,
+    examples,
+    saved: r.saved === true,
+  };
+}
+
+/**
  * Filters for the vocab page.
  * opts: { tab: 'lookups' | 'saved', minCount, sinceDays, query, now }
  */

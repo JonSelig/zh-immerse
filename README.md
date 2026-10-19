@@ -16,6 +16,7 @@ reading aids are there when a sentence is too hard:
   with the sentences you met it in. Press **S** in the popup to save a word.
 - **Word list** (toolbar popup → *Open word list*): sort by most looked up,
   filter by count or date, and export to Anki (TSV) or a JSON backup.
+  *Backup → Clear translation cache* deletes the saved translations.
 - **Levels** (toolbar popup): 1–6 swap only words from HSK 3.0 levels 1 up to
   that level into Chinese and leave the rest in English ("The 天气 is nice
   今天, so we are 去 for a walk in the 公园."); **全部** translates everything.
@@ -26,7 +27,13 @@ reading aids are there when a sentence is too hard:
 - **⌥⇧Z** switches the current tab between Chinese and the original English.
 
 Nothing leaves your machine: translation is on-device, and the dictionary and
-your history are stored locally in the extension.
+your history are stored locally in the extension. Translations are cached so
+pages you revisit load quickly; the cache is kept separately for each site
+(so one site can't tell what you read on another) and holds the newest 50,000
+passages.
+Saved example sentences keep the page's address without its query string.
+In private windows (if you allow the extension there) nothing is cached or
+counted.
 
 ## How it works
 
