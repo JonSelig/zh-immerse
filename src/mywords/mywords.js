@@ -9,6 +9,7 @@ import { sendMessage as send } from '../shared/messaging.js';
 const $ = (id) => document.getElementById(id);
 
 let words = [];
+let autoEn = ''; // English text the page filled in via #addZh lookup
 const dict = new Map(); // zh -> CC-CEDICT entries [{ pinyin, defs }] ([] if not found)
 
 function h(tag, props = {}, ...children) {
@@ -37,15 +38,25 @@ async function entries(zh) {
 /** Lowercase text without tone marks, for search. */
 const fold = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
+/** First non-surname entry, or the first entry if none match. */
+const firstMeaning = (found) => found.find((e) => !/^surname/i.test(e.defs)) ?? found[0];
+
 function haystack(w) {
   const py = (dict.get(w.zh) ?? []).map((e) => e.pinyin.replace(/\d/g, '')).join(' ');
   return fold(`${w.zh} ${w.pinyin} ${py} ${w.en}`);
 }
 
 async function save(next) {
-  await send({ type: 'setMyWords', words: next });
-  words = next;
-  render();
+  try {
+    await send({ type: 'setMyWords', words: next });
+    words = next;
+    render();
+    return true;
+  } catch (err) {
+    $('importNote').textContent = `Couldn't save: ${err.message}`;
+    render();
+    return false;
+  }
 }
 
 function editCell(td, w) {
@@ -62,7 +73,7 @@ function editCell(td, w) {
   });
   input.addEventListener('blur', () => {
     if (!cancelled && input.value.trim() !== w.en) save(editWord(words, w.zh, input.value));
-    else render();
+    else td.textContent = w.en || '—';
   });
   td.replaceChildren(input);
   input.focus();
@@ -73,7 +84,7 @@ function row(w) {
   const en = h('td', { className: 'en', textContent: w.en || '—', title: 'Click to edit' });
   en.addEventListener('click', () => editCell(en, w));
   const remove = h('button', { className: 'icon', textContent: '✕', title: `Remove ${w.zh}` });
-  remove.addEventListener('click', () => save(removeWord(words, w.zh)));
+  remove.addEventListener('click', async () => { await save(removeWord(words, w.zh)); });
   return h('tr', {},
     h('td', { className: 'w', textContent: w.zh }),
     h('td', { className: 'py' }, entry ? pinyinNode(entry.pinyin) : w.pinyin),
@@ -117,14 +128,15 @@ $('importApkg').addEventListener('change', async (e) => {
       return;
     }
     const merged = mergeWords(words, deck.words.map((w) => ({ ...w, source })), mode);
-    await save(merged.words);
-    const parts = [`Added ${merged.added} new word${merged.added === 1 ? '' : 's'} from ${source}`];
-    if (merged.existing) parts.push(`${merged.existing} already in your list`);
-    if (deck.skipped.length) {
-      parts.push(`${deck.skipped.length} skipped (no Chinese): ${deck.skipped.slice(0, 5).join(', ')}${deck.skipped.length > 5 ? ', …' : ''}`);
+    if (await save(merged.words)) {
+      const parts = [`Added ${merged.added} new word${merged.added === 1 ? '' : 's'} from ${source}`];
+      if (merged.existing) parts.push(`${merged.existing} already in your list`);
+      if (deck.skipped.length) {
+        parts.push(`${deck.skipped.length} skipped (no Chinese): ${deck.skipped.slice(0, 5).join(', ')}${deck.skipped.length > 5 ? ', …' : ''}`);
+      }
+      note.textContent = parts.join(' · ');
+      load();
     }
-    note.textContent = parts.join(' · ');
-    load();
   } catch (err) {
     note.textContent = `Import failed: ${err.message}`;
   }
@@ -133,35 +145,49 @@ $('importApkg').addEventListener('change', async (e) => {
 $('addZh').addEventListener('change', async () => {
   const zh = $('addZh').value.trim();
   const found = zh ? await entries(zh) : [];
-  // Prefer a real meaning over a "surname X" entry.
-  const first = found.find((e) => !/^surname/i.test(e.defs)) ?? found[0];
+  // Ignore stale lookups from previous Chinese input.
+  if ($('addZh').value.trim() !== zh) return;
+  const first = firstMeaning(found);
   $('addPinyin').replaceChildren(first ? pinyinNode(first.pinyin) : '');
-  if (first && !$('addEn').value.trim()) $('addEn').value = first.defs;
+  if (first && (!$('addEn').value.trim() || $('addEn').value === autoEn)) {
+    $('addEn').value = first.defs;
+    autoEn = first.defs;
+  } else if (!first && $('addEn').value === autoEn) {
+    $('addEn').value = '';
+    autoEn = '';
+  }
 });
 
 $('addForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const zh = $('addZh').value.trim();
-  const next = addWord(words, { zh, en: $('addEn').value });
+  let en = $('addEn').value;
+  if (!en) {
+    const found = await entries(zh);
+    en = firstMeaning(found)?.defs ?? '';
+  }
+  const next = addWord(words, { zh, en });
   if (!next) {
     $('addNote').textContent = 'Enter a word in Chinese characters (up to 16).';
     return;
   }
   const updated = words.some((w) => w.zh === zh);
-  await save(next);
-  $('addNote').textContent = updated ? `Updated ${zh}.` : `Added ${zh}.`;
-  $('addZh').value = '';
-  $('addEn').value = '';
-  $('addPinyin').replaceChildren();
-  load();
+  if (await save(next)) {
+    $('addNote').textContent = updated ? `Updated ${zh}.` : `Added ${zh}.`;
+    $('addZh').value = '';
+    $('addEn').value = '';
+    $('addPinyin').replaceChildren();
+    autoEn = '';
+    load();
+  }
 });
 
-$('removeAll').addEventListener('click', () => {
+$('removeAll').addEventListener('click', async () => {
   if (!confirm(`Remove all ${words.length} words from My words?`)) return;
-  save([]);
+  await save([]);
 });
 
 $('query').addEventListener('input', render);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('#rows input')) load(); });
 
 load();
