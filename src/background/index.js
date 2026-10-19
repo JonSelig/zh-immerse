@@ -1,20 +1,29 @@
 // Background script: routes messages from content scripts, the popup and the
 // vocab page to the translator, dictionary and word store.
 
-import { translateItems } from './translator.js';
+import { translateItems, clearCache } from './translator.js';
 import { gradeItems } from './graded.js';
 import { FULL_LEVEL } from '../shared/diglot.js';
 import { hostStatus } from './native.js';
 import { lookup } from './dictionary.js';
 import * as words from './words.js';
 import { DEFAULT_SETTINGS } from '../shared/settings.js';
+import { pageUrl } from '../shared/history.js';
+import { refusal } from './guard.js';
 
-const wordInfo = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url });
+const wordInfo = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url: pageUrl(url) });
+
+// Private windows (when the extension is allowed in them): nothing from them
+// is written to disk. Translations aren't cached, hovers aren't counted, and a
+// word saved there keeps no example sentence or address.
+const isPrivate = (sender) => !!sender?.tab?.incognito;
+
+const EXTENSION_BASE = browser.runtime.getURL('');
 
 const handlers = {
-  async translate({ items, level = FULL_LEVEL }) {
+  async translate({ items, level = FULL_LEVEL }, sender) {
     try {
-      const translations = await translateItems(items);
+      const translations = await translateItems(items, { persist: !isPrivate(sender) });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };
     } catch (err) {
@@ -29,18 +38,29 @@ const handlers = {
     return { ...match, count: record?.count ?? 0, saved: !!record?.saved };
   },
 
-  recordLookup: (msg) => words.recordLookup(wordInfo(msg)),
-  setSaved: (msg) => words.setSaved(wordInfo(msg), !!msg.saved),
+  async recordLookup(msg, sender) {
+    if (!isPrivate(sender)) return words.recordLookup(wordInfo(msg));
+    const record = await words.getWord(msg.word);
+    return { count: record?.count ?? 0, saved: !!record?.saved, counted: false };
+  },
+  setSaved(msg, sender) {
+    const info = wordInfo(msg);
+    return words.setSaved(isPrivate(sender) ? { ...info, zh: '', en: '', url: '' } : info, !!msg.saved);
+  },
   listWords: () => words.listWords(),
   deleteWord: ({ word }) => words.deleteWord(word),
   importWords: ({ records }) => words.importWords(records),
   wordStats: () => words.stats(),
   hostStatus: () => hostStatus(),
+  clearCache: () => clearCache(),
 };
 
-browser.runtime.onMessage.addListener((msg) => {
+browser.runtime.onMessage.addListener((msg, sender) => {
   const handler = handlers[msg?.type];
-  return handler ? Promise.resolve(handler(msg)) : undefined;
+  if (!handler) return undefined;
+  const refused = refusal(msg, sender, EXTENSION_BASE);
+  if (refused) return Promise.reject(new Error(`${msg.type} refused: ${refused}`));
+  return Promise.resolve(handler(msg, sender));
 });
 
 async function activeTab() {

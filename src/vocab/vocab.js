@@ -1,7 +1,7 @@
 // Word list page: every looked-up word with its count, sortable and
 // filterable, plus saved words and Anki / JSON export.
 
-import { filterWords, sortWords, toAnkiTSV } from '../shared/history.js';
+import { filterWords, sortWords, toAnkiTSV, cleanRecord, pageUrl } from '../shared/history.js';
 import { syllables } from '../shared/pinyin.js';
 
 const $ = (id) => document.getElementById(id);
@@ -98,10 +98,13 @@ function row(w) {
 
   if (!expanded.has(w.word)) return [tr];
   const examples = w.examples.length
-    ? w.examples.map((ex) => h('div', { className: 'example' },
-      markWord(ex.zh, w.word),
-      ex.en ? h('div', { className: 'en', textContent: ex.en }) : null,
-      ex.url ? h('a', { href: ex.url, target: '_blank', rel: 'noreferrer', textContent: hostOf(ex.url) }) : null))
+    ? w.examples.map((ex) => {
+      const href = pageUrl(ex.url); // http(s) only; also drops query strings saved by older versions
+      return h('div', { className: 'example' },
+        markWord(ex.zh, w.word),
+        ex.en ? h('div', { className: 'en', textContent: ex.en }) : null,
+        href ? h('a', { href, target: '_blank', rel: 'noreferrer', textContent: hostOf(href) }) : null);
+    })
     : [h('div', { className: 'muted', textContent: 'No example sentences yet.' })];
   const detail = h('tr', { className: 'examples' },
     h('td', { colSpan: 7 },
@@ -170,7 +173,8 @@ $('exportTsv').addEventListener('click', () => {
   $('exportNote').textContent = `Exported ${list.length} words. In Anki: File → Import, pick the file; fields map to word, pinyin, definition, count, example.`;
 });
 $('exportJson').addEventListener('click', () => {
-  download(`zh-immerse-backup-${today()}.json`, 'application/json', JSON.stringify({ version: 1, words }, null, 1));
+  const clean = words.map(cleanRecord).filter(Boolean);
+  download(`zh-immerse-backup-${today()}.json`, 'application/json', JSON.stringify({ version: 1, words: clean }, null, 1));
 });
 $('importJson').addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -184,6 +188,11 @@ $('importJson').addEventListener('change', async (e) => {
     $('exportNote').textContent = `Import failed: ${err.message}`;
   }
   e.target.value = '';
+});
+$('clearCache').addEventListener('click', async () => {
+  if (!confirm('Delete all saved translations? Pages are translated again as you visit them. Your word list is kept.')) return;
+  await send({ type: 'clearCache' });
+  $('exportNote').textContent = 'Translation cache cleared.';
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 
