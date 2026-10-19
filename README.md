@@ -24,6 +24,12 @@ reading aids are there when a sentence is too hard:
   original sentence. A word is swapped only if its Chinese also appears in
   Apple's translation of the whole sentence, so "like" becomes 喜欢 in "I like
   apples" but stays English in "it looks like rain".
+- **My words** (我的 in the level row): swap in only the words you've
+  learned. Import Anki decks (`.apkg`, including Anki's current zstd export)
+  or add words by hand on the *My words* page (toolbar popup → 我的 → *Edit
+  my words*). A word is swapped for any of its dictionary meanings in the
+  pronunciation on your card (中 zhōng: middle, among, during…, but not
+  zhòng: to hit), as long as Apple's translation of the sentence uses it.
 - **⌥⇧Z** switches the current tab between Chinese and the original English.
 
 Nothing leaves your machine: translation is on-device, and the dictionary and
