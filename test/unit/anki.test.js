@@ -23,6 +23,9 @@ test('cleanField strips HTML, entities and sound references', () => {
   assert.equal(cleanField('<div>a</div><div>b</div>'), 'a; b');
   assert.equal(cleanField('x&nbsp;y &amp; z &bogus;'), 'x y & z &bogus;');
   assert.equal(cleanField(undefined), '');
+  assert.equal(cleanField('meaning<br>'), 'meaning');
+  assert.equal(cleanField('a<br><br>b'), 'a; b');
+  assert.equal(cleanField('<div>a</div><div><br></div>'), 'a');
 });
 
 test('reads a legacy deck (collection.anki2, field names in col.models)', async () => {
