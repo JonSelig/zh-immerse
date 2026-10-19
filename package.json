@@ -28,6 +28,7 @@
     "web-ext": "^10.8.0"
   },
   "dependencies": {
+    "fzstd": "^0.1.1",
     "pinyin-pro": "^3.29.5"
   }
 }
