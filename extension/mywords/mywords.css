@@ -1,0 +1,13 @@
+/* Extends ../vocab/vocab.css. */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.panel h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.panel .line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.panel label:not(.button) { display: inline-flex; align-items: center; gap: 6px; }
+.panel .note { margin: 8px 0 0; }
+.button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+#addZh { width: 150px; }
+#addEn { flex: 1 1 220px; min-width: 0; }
+.py { min-width: 60px; }
+td.en { cursor: text; }
+td.en input { width: 100%; }
+td.src { color: var(--muted); white-space: nowrap; }
