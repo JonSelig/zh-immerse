@@ -12,7 +12,7 @@
     "build:host": "native-host/build.sh",
     "install:host": "native-host/install.sh",
     "test:host": "node test/host-smoke.mjs",
-    "test": "node --test test/unit/",
+    "test": "node --experimental-sqlite --test 'test/unit/*.test.js'",
     "lint": "web-ext lint --source-dir extension",
     "start": "web-ext run --source-dir extension --start-url https://en.wikipedia.org/wiki/Language_immersion",
     "harness": "node test/harness/server.mjs",
