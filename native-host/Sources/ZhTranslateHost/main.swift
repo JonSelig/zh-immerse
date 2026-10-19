@@ -1,5 +1,5 @@
-// Firefox native-messaging host: translates English to Simplified Chinese with
-// Apple's on-device Translation framework.
+// Native-messaging host for Firefox and Chrome: translates English to
+// Simplified Chinese with Apple's on-device Translation framework.
 //
 // Protocol (each message is a 4-byte native-endian length + UTF-8 JSON):
 //   -> {"id": 1, "type": "translate", "texts": ["Hello", ["Read the ", "docs", " first."]]}
@@ -295,9 +295,9 @@ if let mode = args.first, cliModes.contains(mode) {
         }
     }
 } else {
-    // Native-messaging mode. Firefox passes the manifest path and extension id
-    // as arguments; we don't need them. Frames are read on a background thread
-    // and handled strictly in order.
+    // Native-messaging mode. The browser passes the manifest path and extension
+    // id (Firefox) or the extension origin (Chrome) as arguments; we don't need
+    // them. Frames are read on a background thread and handled strictly in order.
     let (frames, continuation) = AsyncStream.makeStream(of: Data.self)
     Thread.detachNewThread {
         while let frame = readFrame() { continuation.yield(frame) }

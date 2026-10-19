@@ -1,6 +1,7 @@
 node_modules/
 native-host/build/
 extension/dist/
+/build/
 extension/data/cedict.txt
 extension/data/hsk-words.txt
 data-src/
