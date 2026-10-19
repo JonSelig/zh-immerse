@@ -26,6 +26,12 @@ test('cleanField strips HTML, entities and sound references', () => {
   assert.equal(cleanField('meaning<br>'), 'meaning');
   assert.equal(cleanField('a<br><br>b'), 'a; b');
   assert.equal(cleanField('<div>a</div><div><br></div>'), 'a');
+  // Only separators made from tags are collapsed or trimmed; the field's own text is kept.
+  assert.equal(cleanField('a; ; b'), 'a; ; b');
+  assert.equal(cleanField('meaning; '), 'meaning;');
+  assert.equal(cleanField('a&#59; '), 'a;');
+  assert.equal(cleanField('a;<br>b'), 'a;; b');
+  assert.equal(cleanField('a\u0000b'), 'ab');
 });
 
 test('reads a legacy deck (collection.anki2, field names in col.models)', async () => {

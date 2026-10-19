@@ -35,30 +35,16 @@ function decodeEntities(text) {
 
 /** A field's HTML -> plain text: no tags, entities or [sound:…] references. */
 export function cleanField(html) {
-  const PLACEHOLDER = '\u0000'; // private marker for tag-derived separators
-  let text = String(html ?? '');
-  // Remove sound references
-  text = text.replace(/\[sound:[^\]]*\]/g, ' ');
-  // Replace block-level tags with placeholder (not the actual '; ' separator yet)
-  text = text.replace(/<(br|div|p|li)\b[^>]*>/gi, PLACEHOLDER);
-  // Remove other HTML tags
-  text = text.replace(/<[^>]*>/g, '');
-  // Decode entities (preserves literal semicolons in text and unknown entities)
-  text = decodeEntities(text);
-  // Collapse runs of placeholder and whitespace (only if containing a placeholder)
-  text = text.replace(new RegExp(`${PLACEHOLDER}[${PLACEHOLDER}\\s]*`, 'g'), PLACEHOLDER);
-  // Replace placeholders with '; ' (the actual separator)
-  text = text.replace(new RegExp(PLACEHOLDER, 'g'), '; ');
-  // Remove leading/trailing tag separators (before normalizing spaces)
-  // This preserves literal semicolons from text/entities which don't have spaces
-  text = text.replace(/^; +/, '').replace(/\s; $/, '').replace(/; +$/, '');
-  // Normalize multiple spaces
-  text = text.replace(/\s+/g, ' ');
-  // Collapse multiple separators into single separator
-  text = text.replace(/(; )+/g, '; ');
-  // Final whitespace trim
-  text = text.trim();
-  return text;
+  return decodeEntities(String(html ?? '')
+    .replace(/\0/g, '')
+    .replace(/\[sound:[^\]]*\]/g, ' ')
+    .replace(/<(br|div|p|li)\b[^>]*>/gi, '\0') // line breaks separate meanings
+    .replace(/<[^>]*>/g, '')) // inline tags don't: <b>中</b>国 is 中国
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\0[\s\0]*/g, '\0') // one separator per break, however many tags
+    .replace(/^\0|\0$/g, '')
+    .trim()
+    .replace(/\0/g, '; ');
 }
 
 const hanShare = (text) => {
