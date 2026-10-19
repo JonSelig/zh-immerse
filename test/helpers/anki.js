@@ -2,6 +2,10 @@
 // databases shaped like Anki collections.
 
 import { deflateRawSync } from 'node:zlib';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const encoder = new TextEncoder();
 const bytesOf = (content) => (typeof content === 'string' ? encoder.encode(content) : content);
@@ -43,4 +47,19 @@ export function makeZip(files, { method = 8 } = {}) {
   end.writeUInt32LE(central.reduce((n, b) => n + b.length, 0), 12);
   end.writeUInt32LE(offset, 16);
   return new Uint8Array(Buffer.concat([...locals, ...central, end]));
+}
+
+/** A SQLite database file made by running `sql`, as bytes. */
+export function sqliteBytes(sql, { pageSize = 4096 } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'zhi-sqlite-'));
+  try {
+    const file = join(dir, 'db.sqlite');
+    const db = new DatabaseSync(file);
+    db.exec(`pragma page_size = ${pageSize};`);
+    db.exec(sql);
+    db.close();
+    return new Uint8Array(readFileSync(file));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
