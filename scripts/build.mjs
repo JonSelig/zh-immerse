@@ -10,6 +10,7 @@ const options = {
     vocab: 'src/vocab/vocab.js',
   },
   outdir: 'extension/dist',
+  loader: { '.css': 'text' }, // src/content/overlay.css is bundled as a string
   bundle: true,
   format: 'iife',
   target: 'firefox140',
