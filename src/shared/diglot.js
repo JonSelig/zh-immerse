@@ -1,6 +1,8 @@
 // Graded reading ("diglot weave"): at levels 1–6, only English words whose
 // Chinese equivalent is an HSK 3.0 word at or below the level are swapped for
-// Chinese; the rest of the sentence stays English. Level 7 translates everything.
+// Chinese; the rest of the sentence stays English. Level 0 (My words) does the
+// same with a map built from the user's own list (shared/mywords.js). Level 7
+// translates everything.
 //
 // Word data (built by scripts/build-hsk.mjs) is a text file of
 // "english<TAB>candidates" lines, e.g. "like	喜欢:1,爱:1,像:2", candidates
@@ -11,8 +13,9 @@
 // words honest: "like" becomes 喜欢 in "I like apples" (我喜欢苹果) but stays
 // English in "it looks like rain" (看起来要下雨了).
 
+export const MY_LEVEL = 0;
 export const FULL_LEVEL = 7;
-export const LEVELS = [1, 2, 3, 4, 5, 6, FULL_LEVEL];
+export const LEVELS = [MY_LEVEL, 1, 2, 3, 4, 5, 6, FULL_LEVEL];
 const MAX_PHRASE = 3;
 
 /** -> Map of lowercase English (word or phrase) -> [{ zh, level }] */

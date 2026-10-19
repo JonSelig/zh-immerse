@@ -51,7 +51,7 @@ export class PageTranslator {
    * @param {object} opts
    * @param {(items: Array<string|string[]>, level: number) => Promise<Array<string|string[]|object|null>>} opts.translate
    *   Resolves with one result per item: the full translation (level 7), or at
-   *   levels 1–6 { segments, ranges, full } with only HSK words swapped in.
+   *   levels 0–6 { segments, ranges, full } with only HSK (or My words) words swapped in.
    * @param {(err: Error) => void} [opts.onError]
    */
   constructor({ translate, onError = () => {} }) {
@@ -101,7 +101,7 @@ export class PageTranslator {
     this.reset();
   }
 
-  /** 1–6: swap only HSK words up to that level; 7: translate everything. */
+  /** 0: swap only My words; 1–6: swap only HSK words up to that level; 7: translate everything. */
   setLevel(level) {
     if (this.level === level) return;
     this.level = level;
