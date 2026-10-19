@@ -4,6 +4,8 @@
 const EOCD_SIG = 0x06054b50;
 const CENTRAL_SIG = 0x02014b50;
 const LOCAL_SIG = 0x04034b50;
+// A hostile file can declare any size; no Anki collection is near this.
+const MAX_ENTRY = 256 * 1024 * 1024;
 
 /** -> Map of entry name -> () => Promise<Uint8Array> (the entry's uncompressed bytes). */
 export function readZip(buffer) {
@@ -29,6 +31,7 @@ export function readZip(buffer) {
     const flags = view.getUint16(pos + 8, true);
     const method = view.getUint16(pos + 10, true);
     const size = view.getUint32(pos + 20, true); // compressed
+    const rawSize = view.getUint32(pos + 24, true); // uncompressed
     const nameLength = view.getUint16(pos + 28, true);
     const extraLength = view.getUint16(pos + 30, true);
     const commentLength = view.getUint16(pos + 32, true);
@@ -38,18 +41,38 @@ export function readZip(buffer) {
     if (size === 0xffffffff || local === 0xffffffff) throw new Error('Zip64 archives are not supported');
     entries.set(name, async () => {
       if (flags & 1) throw new Error(`${name} is encrypted`);
+      if (rawSize > MAX_ENTRY) throw new Error(`${name} is too large`);
       if (view.getUint32(local, true) !== LOCAL_SIG) throw new Error('Corrupt zip entry');
       const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
       const data = bytes.subarray(start, start + size);
       if (method === 0) return data;
-      if (method === 8) return inflate(data);
+      if (method === 8) return inflate(data, rawSize, name);
       throw new Error(`${name} uses an unsupported compression method (${method})`);
     });
   }
   return entries;
 }
 
-async function inflate(data) {
-  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/** Inflates `data`, giving up once the output outgrows the `limit` the zip declared. */
+async function inflate(data, limit, name) {
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error(`${name} is too large`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.length;
+  }
+  return out;
 }

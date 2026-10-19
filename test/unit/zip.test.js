@@ -42,3 +42,20 @@ test('rejects unknown compression methods and encrypted entries when read', asyn
   view.setUint16(central + 8, 1, true); // encrypted flag
   await assert.rejects(readZip(bytes).get('x')(), /encrypted/);
 });
+
+test('rejects entries that declare more than 256 MB uncompressed', async () => {
+  for (const method of [0, 8]) {
+    const bytes = makeZip({ x: 'y' }, { method });
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const central = bytes.length - 22 - 47;
+    view.setUint32(central + 24, 300 * 1024 * 1024, true);
+    await assert.rejects(readZip(bytes).get('x')(), /too large/);
+  }
+});
+
+test('stops inflating once an entry outgrows its declared size', async () => {
+  const bytes = makeZip({ x: 'y'.repeat(5000) });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  view.setUint32(bytes.length - 22 - 47 + 24, 10, true); // declared 10, really 5000
+  await assert.rejects(readZip(bytes).get('x')(), /too large/);
+});

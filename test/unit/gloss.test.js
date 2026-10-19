@@ -22,3 +22,7 @@ test('glosses can skip senses like surnames and dialect', () => {
   assert.deepEqual(glosses(defs), ['china', 'chinese', 'surname zhong']);
   assert.deepEqual(glosses(defs, { skip: SKIP_MEANING }), ['china', 'chinese']);
 });
+
+test('glosses applies skip to a whole definition, not to its comma parts', () => {
+  assert.deepEqual(glosses('classifier for books, periodicals, files etc; root', { skip: SKIP_MEANING }), ['root']);
+});

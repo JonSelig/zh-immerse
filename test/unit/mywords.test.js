@@ -77,6 +77,8 @@ test('readingEntries keeps the dictionary entries for the card pronunciation', (
   assert.deepEqual(readingEntries(zh, 'zhong1').map((e) => e.pinyin), ['zhong1', 'Zhong1']); // tone numbers
   assert.deepEqual(readingEntries(zh, '').map((e) => e.pinyin), ['zhong1', 'zhong4', 'Zhong1']); // no card pinyin
   assert.deepEqual(readingEntries(zh, 'zhóng').map((e) => e.pinyin), ['zhong1', 'zhong4', 'Zhong1']); // no match: all
+  assert.equal(readingEntries(DICT.get('中国人'), 'zhong1guo2ren2').length, 1); // numbered, unspaced
+  assert.deepEqual(readingEntries([{ pinyin: 'lu:4' }, { pinyin: 'lu4' }], 'lv4').map((e) => e.pinyin), ['lu:4']); // v for ü
   assert.equal(readingEntries(DICT.get('他的'), 'tāde').length, 1); // neutral tone, no space
   assert.equal(readingEntries(DICT.get('中国人'), 'Zhōngguó rén').length, 1);
   assert.deepEqual(readingEntries(DICT.get('西安'), 'Xī’ān').map((e) => e.pinyin), ['Xi1 an1']);

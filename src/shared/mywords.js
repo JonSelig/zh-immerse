@@ -75,7 +75,13 @@ export const removeWord = (list, zh) => list.filter((w) => w.zh !== zh);
 
 export const editWord = (list, zh, en) => list.map((w) => (w.zh === zh ? { ...w, en: text(en) } : w));
 
-const normPinyin = (pinyin) => toMarks(pinyin).normalize('NFC').toLowerCase().replace(/[\s'’'·-]/g, '');
+// Card pinyin may be numbered ("zhong1guo2", "lv4"): split after each tone
+// digit and read v as ü, as CC-CEDICT's "lu:4" is read, before adding marks.
+const numbered = (pinyin) => pinyin
+  .replace(/([1-5])(?=[a-zA-Z])/g, '$1 ')
+  .replace(/v/gi, (c) => (c === 'V' ? 'Ü' : 'ü'));
+
+const normPinyin = (pinyin) => toMarks(numbered(pinyin)).normalize('NFC').toLowerCase().replace(/[\s'’'·-]/g, '');
 
 /**
  * CC-CEDICT entries for the card's pronunciation ("zhōng" or "zhong1").

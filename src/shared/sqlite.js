@@ -23,6 +23,7 @@ const SIZES = [0, 1, 2, 3, 4, 6, 8, 8, 0, 0];
 function decodeRecord(buf) {
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const [headerSize, n] = varint(buf, 0);
+  if (headerSize > buf.length) throw new Error('Corrupt database: bad record header');
   const types = [];
   for (let p = n; p < headerSize;) {
     const [type, k] = varint(buf, p);
@@ -89,6 +90,7 @@ export function openDb(bytes) {
     const minLocal = Math.floor(((usable - 12) * 32) / 255) - 23;
     let local = minLocal + ((size - minLocal) % (usable - 4));
     if (local > maxLocal) local = minLocal;
+    if (size > bytes.length) throw new Error('Corrupt database: bad payload size');
     const out = new Uint8Array(size);
     out.set(bytes.subarray(pos, pos + local));
     let filled = local;
@@ -104,8 +106,11 @@ export function openDb(bytes) {
     return out;
   }
 
-  function* walk(n, depth = 0) {
+  // `seen` holds the pages of one tree: a page appears in a valid B-tree once.
+  function* walk(n, seen, depth = 0) {
     if (depth > 64) throw new Error('Corrupt database: B-tree too deep');
+    if (seen.has(n)) throw new Error(`Corrupt database: page ${n} visited twice`);
+    seen.add(n);
     const start = pageStart(n);
     const header = n === 1 ? 100 : start; // page 1 starts with the 100-byte file header
     const type = bytes[header];
@@ -119,30 +124,30 @@ export function openDb(bytes) {
         const [rowid, b] = varint(bytes, cell + a);
         yield { rowid, values: decodeRecord(payload(cell + a + b, size, false)) };
       } else if (type === 0x05) { // table interior: left child, key
-        yield* walk(view.getUint32(cell), depth + 1);
+        yield* walk(view.getUint32(cell), seen, depth + 1);
       } else if (type === 0x0a) { // index leaf: size, payload
         const [size, a] = varint(bytes, cell);
         yield { rowid: null, values: decodeRecord(payload(cell + a, size, true)) };
       } else if (type === 0x02) { // index interior: left child, then this cell's own row
-        yield* walk(view.getUint32(cell), depth + 1);
+        yield* walk(view.getUint32(cell), seen, depth + 1);
         const [size, a] = varint(bytes, cell + 4);
         yield { rowid: null, values: decodeRecord(payload(cell + 4 + a, size, true)) };
       } else {
         throw new Error(`Corrupt database: page ${n} has type ${type}`);
       }
     }
-    if (interior) yield* walk(view.getUint32(header + 8), depth + 1);
+    if (interior) yield* walk(view.getUint32(header + 8), seen, depth + 1);
   }
 
   const tables = new Map();
-  for (const { values: [type, name, , rootpage] } of walk(1)) {
+  for (const { values: [type, name, , rootpage] } of walk(1, new Set())) {
     if (type === 'table' && rootpage > 0) tables.set(name, rootpage);
   }
   return {
     tables: () => [...tables.keys()],
     rows(name) {
       if (!tables.has(name)) throw new Error(`No table named ${name}`);
-      return [...walk(tables.get(name))];
+      return [...walk(tables.get(name), new Set())];
     },
   };
 }

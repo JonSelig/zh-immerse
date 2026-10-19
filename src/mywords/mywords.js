@@ -2,7 +2,7 @@
 // the 我的 reading level swaps into Chinese.
 
 import { readApkg } from '../shared/anki.js';
-import { mergeWords, addWord, removeWord, editWord, readingEntries } from '../shared/mywords.js';
+import { MAX_MY_WORDS, cleanMyWord, mergeWords, addWord, removeWord, editWord, readingEntries } from '../shared/mywords.js';
 import { syllables } from '../shared/pinyin.js';
 import { sendMessage as send } from '../shared/messaging.js';
 
@@ -132,12 +132,27 @@ $('importApkg').addEventListener('change', async (e) => {
       note.textContent = '';
       return;
     }
-    const merged = mergeWords(words, deck.words.map((w) => ({ ...w, source })), mode);
+    // The same cleaning the background applies, so "Added" counts only words that stay.
+    const clean = [];
+    const rejected = [];
+    for (const w of deck.words) {
+      const kept = cleanMyWord({ ...w, source });
+      if (kept) clean.push(kept);
+      else rejected.push(w.zh);
+    }
+    const merged = mergeWords(words, clean, mode);
+    if (merged.words.length > MAX_MY_WORDS) {
+      note.textContent = `Import failed: My words holds at most ${MAX_MY_WORDS.toLocaleString('en-US')} words (this would make ${merged.words.length.toLocaleString('en-US')}).`;
+      return;
+    }
     if (await save(merged.words)) {
       const parts = [`Added ${merged.added} new word${merged.added === 1 ? '' : 's'} from ${source}`];
       if (merged.existing) parts.push(`${merged.existing} already in your list`);
       if (deck.skipped.length) {
         parts.push(`${deck.skipped.length} skipped (no Chinese): ${deck.skipped.slice(0, 5).join(', ')}${deck.skipped.length > 5 ? ', …' : ''}`);
+      }
+      if (rejected.length) {
+        parts.push(`${rejected.length} skipped (too long): ${rejected.slice(0, 5).join(', ')}${rejected.length > 5 ? ', …' : ''}`);
       }
       note.textContent = parts.join(' · ');
       load();

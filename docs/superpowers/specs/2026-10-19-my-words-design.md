@@ -195,6 +195,9 @@ version".
 - **No HSK data in this mode:** it is not used for My words, because it
   doesn't record pronunciation (it would bring "hit" back for 中). CC-CEDICT
   covers the same meanings.
+- **Privacy:** the swapped-in Chinese is ordinary page text, so a site's own
+  scripts can read it and learn which words are on your list. The README says
+  so; turning translation off for that site avoids it.
 - **Editing a word's English adds to these meanings; it can't remove
   dictionary meanings.** To keep a word from being swapped, remove it.
 - **Where it runs:** the dictionary is already loaded in the background for

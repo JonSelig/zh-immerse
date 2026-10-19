@@ -12,6 +12,8 @@ const COLLECTIONS = ['collection.anki21b', 'collection.anki21', 'collection.anki
 // for older Anki versions to show.
 const STUB = /^Please update to the latest Anki version/;
 
+const MAX_COMPRESSED = 256 * 1024 * 1024;
+
 const HAN = /\p{Script=Han}/u;
 const HAN_RUN = /\p{Script=Han}+/u;
 const ZH_NAME = /^(hanzi|simplified|chinese|word|front|expression)$/i;
@@ -124,7 +126,15 @@ export async function readApkg(buffer) {
   for (const name of COLLECTIONS) {
     if (!zip.has(name)) continue;
     let bytes = await zip.get(name)();
-    if (name.endsWith('b')) bytes = decompress(bytes);
+    if (name.endsWith('b')) {
+      // zstd headers declare their own output size, which fzstd trusts.
+      if (bytes.length > MAX_COMPRESSED) throw new Error(`${name} is too large`);
+      try {
+        bytes = decompress(bytes);
+      } catch (err) {
+        throw new Error(`Could not decompress the collection: ${err.message}`);
+      }
+    }
     const result = readCollection(openDb(bytes));
     if (result) return result;
   }

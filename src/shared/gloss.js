@@ -28,10 +28,12 @@ export function cleanGloss(gloss) {
 /** Usable lowercase English keys in a definition list, in order, no repeats. */
 export function glosses(text, { skip = null } = {}) {
   const out = [];
-  for (const part of String(text ?? '').split(/[;,/]/)) {
-    if (skip?.test(part)) continue;
-    const en = cleanGloss(part).toLowerCase();
-    if (GLOSS.test(en) && !STOP.has(en) && !out.includes(en)) out.push(en);
+  for (const meaning of String(text ?? '').split(';')) {
+    if (skip?.test(meaning)) continue;
+    for (const part of meaning.split(/[,/]/)) {
+      const en = cleanGloss(part).toLowerCase();
+      if (GLOSS.test(en) && !STOP.has(en) && !out.includes(en)) out.push(en);
+    }
   }
   return out;
 }

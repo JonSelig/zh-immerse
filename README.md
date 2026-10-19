@@ -37,6 +37,9 @@ your history are stored locally in the extension. Translations are cached so
 pages you revisit load quickly; the cache is kept separately for each site
 (so one site can't tell what you read on another) and holds the newest 50,000
 passages.
+At 我的, a site's own scripts can see which words were swapped in, and so learn
+words on your list; turn translation off for that site in the popup if that
+matters.
 Saved example sentences keep the page's address without its query string.
 In private windows (if you allow the extension there) nothing is cached or
 counted.

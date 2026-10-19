@@ -3,7 +3,7 @@
 // or the user's own words (0, My words). See shared/diglot.js.
 
 import { parseWordMap, diglotItem, MY_LEVEL } from '../shared/diglot.js';
-import { buildMyWordMap } from '../shared/mywords.js';
+import { buildMyWordMap, cleanMyWords } from '../shared/mywords.js';
 import { dictionary } from './dictionary.js';
 
 let loading = null;
@@ -19,7 +19,7 @@ function load() {
 
 function loadMine() {
   mine ??= Promise.all([browser.storage.local.get({ myWords: [] }), dictionary()])
-    .then(([{ myWords }, dict]) => buildMyWordMap(myWords, (zh) => dict.get(zh) ?? []))
+    .then(([{ myWords }, dict]) => buildMyWordMap(cleanMyWords(myWords), (zh) => dict.get(zh) ?? []))
     .catch((err) => { mine = null; throw err; });
   return mine;
 }

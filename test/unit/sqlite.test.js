@@ -60,3 +60,24 @@ test('rejects files that are not SQLite databases', () => {
 test('rejects unknown tables', () => {
   assert.throws(() => openDb(sqliteBytes('create table a (x);')).rows('b'), /No table named b/);
 });
+
+test('rejects a B-tree that visits a page twice', () => {
+  const bytes = sqliteBytes(`
+    create table t (id integer primary key, b text);
+    insert into t (b) select 'row ' || value from (with recursive s(value) as (select 1 union all select value + 1 from s where value < 500) select value from s);
+  `, { pageSize: 512 });
+  let page = -1;
+  for (let n = 1; n * 512 < bytes.length; n++) if (bytes[n * 512] === 0x05) { page = n; break; }
+  assert.ok(page > 0, 'fixture has an interior page');
+  const view = new DataView(bytes.buffer);
+  view.setUint32(page * 512 + 8, page + 1); // right-most child is the page itself (pages are numbered from 1)
+  assert.throws(() => openDb(bytes).rows('t'), /visited twice/);
+});
+
+test('rejects a record whose header is larger than the record', () => {
+  const bytes = sqliteBytes("create table a (x text); insert into a values ('ZZZZZZ');");
+  const at = bytes.indexOf(0x5a);
+  assert.deepEqual([...bytes.subarray(at - 2, at)], [2, 25]); // header size, text(6)
+  bytes[at - 2] = 0x7f;
+  assert.throws(() => openDb(bytes).rows('a'), /bad record header/);
+});
