@@ -48,15 +48,20 @@ function haystack(w) {
 
 async function save(next) {
   try {
-    await send({ type: 'setMyWords', words: next });
+    const reply = await send({ type: 'setMyWords', words: next });
+    if (typeof reply?.count !== 'number') throw new Error('the extension didn\'t save the list. Reload the extension (chrome://extensions or about:debugging) and try again');
     words = next;
-    render();
-    return true;
   } catch (err) {
     $('importNote').textContent = `Couldn't save: ${err.message}`;
     render();
     return false;
   }
+  // Clear earlier "Couldn't save" message on success.
+  if ($('importNote').textContent.startsWith('Couldn\'t save')) {
+    $('importNote').textContent = '';
+  }
+  render();
+  return true;
 }
 
 function editCell(td, w) {
@@ -162,7 +167,7 @@ $('addForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const zh = $('addZh').value.trim();
   let en = $('addEn').value;
-  if (!en) {
+  if (zh && !en) {
     const found = await entries(zh);
     en = firstMeaning(found)?.defs ?? '';
   }
