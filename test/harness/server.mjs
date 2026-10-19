@@ -11,7 +11,7 @@
 
 import { createServer } from 'node:http';
 import { readFile, readdir } from 'node:fs/promises';
-import { resolve, dirname, extname, join, normalize } from 'node:path';
+import { resolve, dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { startHost } from '../../scripts/host-client.mjs';
@@ -116,12 +116,18 @@ async function serveFile(res, path, inject) {
 
 function safeJoin(base, rel) {
   const full = normalize(join(base, rel));
-  if (!full.startsWith(base)) throw Object.assign(new Error('forbidden'), { status: 403 });
+  if (!full.startsWith(base + sep)) throw Object.assign(new Error('forbidden'), { status: 403 });
   return full;
 }
 
+// Only this machine, under its own name: the API drives the real translator
+// and holds word history, so other hosts on the network and DNS-rebinding
+// pages (which send their own Host header) are turned away.
+const HOSTS = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+
 createServer(async (req, res) => {
   try {
+    if (!HOSTS.has(req.headers.host)) throw Object.assign(new Error('forbidden'), { status: 403 });
     const url = new URL(req.url, `http://localhost:${port}`);
     if (req.method === 'POST' && url.pathname === '/api') {
       let raw = '';
@@ -150,4 +156,4 @@ createServer(async (req, res) => {
   } catch (err) {
     res.writeHead(err.status ?? (err.code === 'ENOENT' ? 404 : 500)).end(String(err.message));
   }
-}).listen(port, () => console.log(`harness: http://localhost:${port}/`));
+}).listen(port, '127.0.0.1', () => console.log(`harness: http://localhost:${port}/`));

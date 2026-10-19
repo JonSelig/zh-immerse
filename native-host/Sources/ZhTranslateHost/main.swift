@@ -76,10 +76,18 @@ func readExactly(_ count: Int) -> Data? {
     return data
 }
 
+// Real batches are a few KB (see translator.js); refuse anything far larger
+// rather than allocating whatever length a frame claims (up to 4 GB).
+let maxFrameBytes = 8 * 1024 * 1024
+
 func readFrame() -> Data? {
     guard let header = readExactly(4) else { return nil }
     let length = header.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
     if length == 0 { return Data() }
+    if Int(length) > maxFrameBytes {
+        log("frame of \(length) bytes exceeds \(maxFrameBytes); closing")
+        return nil
+    }
     return readExactly(Int(length))
 }
 
