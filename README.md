@@ -20,8 +20,8 @@ reading aids are there when a sentence is too hard:
 - **Levels** (toolbar popup): 1–6 swap only words from HSK 3.0 levels 1 up to
   that level into Chinese and leave the rest in English ("The 天气 is nice
   今天, so we are 去 for a walk in the 公园."); **全部** translates everything.
-  Swapped words have a dotted underline, and hovering one shows the
-  original sentence. A word is swapped only if its Chinese also appears in
+  Swapped words have a dotted underline, and hovering one shows the English
+  word it replaced and the original sentence. A word is swapped only if its Chinese also appears in
   Apple's translation of the whole sentence, so "like" becomes 喜欢 in "I like
   apples" but stays English in "it looks like rain".
 - **⌥⇧Z** switches the current tab between Chinese and the original English.

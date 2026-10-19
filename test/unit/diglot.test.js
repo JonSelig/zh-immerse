@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -63,4 +63,20 @@ test('segmented items keep their shape', () => {
   assert.deepEqual(out.segments, ['I 喜欢 ', 'the 天气', ' today.']);
   assert.equal(out.full, '我喜欢今天的天气。');
   assert.deepEqual(out.ranges.map((r) => r.length), [1, 1, 0]);
+});
+
+test('ranges keep the English each swap replaced, as written on the page', () => {
+  const out = diglotItem(["My friend's ice cream ", 'went'], ['我朋友的冰淇淋', '走了'], map, 3);
+  assert.deepEqual(out.segments, ["My 朋友's 冰淇淋 ", '走']);
+  assert.deepEqual(out.ranges, [[[3, 5, 'friend'], [8, 11, 'ice cream']], [[0, 1, 'went']]]);
+});
+
+test('replacedAt finds the English behind the character at an offset', () => {
+  const swaps = [[2, 4, 'like'], [5, 7, 'apples']];
+  assert.equal(replacedAt(swaps, 2), 'like');
+  assert.equal(replacedAt(swaps, 3), 'like');
+  assert.equal(replacedAt(swaps, 6), 'apples');
+  assert.equal(replacedAt(swaps, 4), '');
+  assert.equal(replacedAt(swaps, 7), '');
+  assert.equal(replacedAt(null, 0), '');
 });

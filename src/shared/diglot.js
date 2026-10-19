@@ -137,14 +137,17 @@ export function findSwaps(text, map, level, inTranslation) {
   return swaps;
 }
 
-/** Applies swaps -> { text, ranges: [[start, end], ...] } (ranges in the new text). */
+/**
+ * Applies swaps -> { text, ranges: [[start, end, en], ...] }: ranges in the
+ * new text, each with the English it replaced.
+ */
 export function applySwaps(text, swaps) {
   let out = '';
   let cursor = 0;
   const ranges = [];
   for (const s of swaps) {
     out += text.slice(cursor, s.start);
-    ranges.push([out.length, out.length + s.zh.length]);
+    ranges.push([out.length, out.length + s.zh.length, s.en]);
     out += s.zh;
     cursor = s.end;
   }
@@ -154,7 +157,7 @@ export function applySwaps(text, swaps) {
 /**
  * Graded version of one translation item. `item` is the English (a string or
  * an array of segments), `translation` its full Chinese translation in the
- * same shape. -> { segments: [mixed text], ranges: [[[s, e], ...]], full }
+ * same shape. -> { segments: [mixed text], ranges: [[[s, e, en], ...]], full }
  */
 export function diglotItem(item, translation, map, level) {
   const segments = Array.isArray(item) ? item : [item];
@@ -167,4 +170,9 @@ export function diglotItem(item, translation, map, level) {
     out.ranges.push(ranges);
   }
   return out;
+}
+
+/** The English replaced by the swapped word covering `offset`, or ''. */
+export function replacedAt(ranges, offset) {
+  return ranges?.find(([start, end]) => offset >= start && offset < end)?.[2] ?? '';
 }
