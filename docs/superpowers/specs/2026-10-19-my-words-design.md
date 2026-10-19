@@ -51,8 +51,8 @@ This is a new extension page, separate from the lookup-history word list
     words you added by hand?"
 - **Add a word**
   - A Chinese input field. When it loses focus, the English is filled in from
-    CC-CEDICT: the definitions of the first entry that isn't a surname. Pinyin is
-    shown next to it.
+    CC-CEDICT: the definitions of the first entry that isn't a surname.
+    Pinyin is shown next to it.
   - The English can be edited before you click **Add**.
   - Adding a word that is already in the list updates its English.
 - **List**
@@ -136,9 +136,10 @@ version".
     leaf page `0x0D`), follows overflow page chains, and decodes record
     serial types (NULL, integers of 1–8 bytes, float, 0, 1, BLOB and TEXT as
     UTF-8).
-  - It rejects databases that are not UTF-8. It reads WITHOUT ROWID tables (index B-trees, `0x02`/`0x0A`), because current Anki stores `fields` that way and leaves `col.models` empty.
-    It doesn't use indexes, because full scans of a few hundred rows are
-    instant.
+  - It rejects databases that are not UTF-8. It reads WITHOUT ROWID tables
+    (index B-trees, `0x02`/`0x0A`), because current Anki stores `fields`
+    that way and leaves `col.models` empty. It doesn't use indexes, because
+    full scans of a few hundred rows are instant.
 - **`src/shared/anki.js`**: `readApkg(arrayBuffer) -> { deck, words: [{ zh,
   pinyin, en }], skipped: [string] }`.
   - **Field names**: from the `fields` table (`ntid, ord, name`) when it
@@ -152,8 +153,13 @@ version".
     it's empty, and English for swapping comes from CC-CEDICT alone.
   - **Pinyin field**: the first field whose name matches `/^pinyin$/i`.
     Otherwise it's empty (all pronunciations).
-  - **Cleaning field values**: replace `<br>`, `<div>`, `<p>` and `<li>` with `; ` (runs collapse into one; separators at start and end are dropped); strip other tags without adding spaces (so `<b>中</b>国` stays 中国). Decode entities (`&#x27;`, `&amp;`, `&nbsp;`, …), remove `[sound:…]` and trim. From the Chinese, keep
-    the first run of Han characters (`/\p{Script=Han}+/u`).
+  - **Cleaning field values**: remove `[sound:…]`; replace `<br>`, `<div>`,
+    `<p>` and `<li>` with `; ` and strip other tags without adding spaces
+    (so `<b>中</b>国` stays 中国); decode entities (`&#x27;`, `&amp;`,
+    `&nbsp;`, …); then collapse runs of separators to one `; `, and drop
+    separators at the start and end. A literal `;` from the field text or
+    from a decoded entity (like `&#59;`) is never collapsed or trimmed. From
+    the Chinese, keep the first run of Han characters (`/\p{Script=Han}+/u`).
   - Notes without Han characters go into `skipped` (by their first field,
     shortened to 20 characters). Duplicate `zh` values within a deck are
     merged, keeping the first.
@@ -192,8 +198,8 @@ version".
 - **Editing a word's English adds to these meanings; it can't remove
   dictionary meanings.** To keep a word from being swapped, remove it.
 - **Where it runs:** the dictionary is already loaded in the background for
-  hover lookups. `src/background/dictionary.js` exports `dictionary()` (the whole map) for
-  `graded.js` to use.
+  hover lookups. `src/background/dictionary.js` exports `dictionary()` (the
+  whole map) for `graded.js` to use.
 - **Wrong senses are still filtered:** a meaning is used only where the
   Chinese also appears in Apple's translation of the sentence. Like the HSK
   levels, this allows correct but awkward swaps ("中 the meeting").
