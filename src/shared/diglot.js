@@ -151,11 +151,16 @@ export function findSwaps(text, map, level, inTranslation, {
       let end = span.at(-1).end;
       let { zh } = entry;
       const next = tokens[i + n];
-      if (isWord && next && text.slice(end, next.start) === ' ') {
-        const prep = Object.keys(VERB_PREPS).find((p) => VERB_PREPS[p].en.includes(next.word.toLowerCase())
+      if (next && text.slice(end, next.start) === ' ') {
+        const nextWord = next.word.toLowerCase();
+        const fits = (p) => VERB_PREPS[p].en.includes(nextWord);
+        // A word that already ends in its preposition (来到 "come to") takes
+        // the English one along instead of leaving it dangling.
+        const own = zh.length > 1 && VERB_PREPS[zh.at(-1)] && fits(zh.at(-1));
+        const prep = !own && isWord && Object.keys(VERB_PREPS).find((p) => fits(p)
           && knownPrep(p) && !isWord(zh + p) && inTranslation(zh + p));
-        if (prep) {
-          zh += prep;
+        if (own || prep) {
+          if (prep) zh += prep;
           end = next.end;
           n += 1;
         }
@@ -187,7 +192,7 @@ export function applySwaps(text, swaps) {
 
 // Sentence ends: English . ! ? followed by whitespace; Chinese 。！？ (and
 // closing quotes or brackets after them).
-const EN_SENTENCE_END = /[.!?]+["'”’)\]]*\s+/g;
+const EN_SENTENCE_END = /[.!?]+["'”’)\]]*(?:\[\d+\])*\s+/g; // also "China.[1] She"
 const ZH_SENTENCE = /[^。！？!?]+(?:[。！？!?]+["'”’」』）)]*|$)/g;
 
 /** Start offsets of the sentences in `text`. */

@@ -145,3 +145,19 @@ test('a phrase swap records the English it replaced', () => {
   const out = diglotItem('I live in China.', '我住在中国。', verbMap, 1, { isWord });
   assert.deepEqual(out.ranges, [[[2, 4, 'live in']]]);
 });
+
+test('a dictionary verb+preposition word takes its English preposition along', () => {
+  // 来到 is a real word ("come to"); "to" must not be left dangling.
+  const comeMap = parseWordMap('come\t来到:1');
+  const out = diglotItem('He came to China.', '他来到了中国。', comeMap, 1, { isWord: (s) => s === '来到' || s === '中国' });
+  assert.deepEqual(out.segments, ['He 来到 China.']);
+  assert.deepEqual(out.ranges, [[[3, 5, 'came to']]]);
+});
+
+test('sentence matching handles a sentence start at a segment boundary and citations', () => {
+  const split = diglotItem(['I live in China. ', 'She ran to the bus stop.'], ['我住在中国。', '她跑到了公交车站。'], stopMap, 1, { isWord });
+  assert.deepEqual(split.segments, ['I 住在 China. ', 'She ran to the bus stop.']);
+  // A Wikipedia-style citation after the full stop still ends the sentence.
+  const cited = diglotItem('I live in China.[1] She ran to the bus stop.', BLOCK_ZH, stopMap, 1, { isWord });
+  assert.equal(cited.segments[0], 'I 住在 China.[1] She ran to the bus stop.');
+});

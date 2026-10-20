@@ -33,17 +33,17 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 /** items/translations as sent to and returned by the translator. */
 export async function gradeItems(items, translations, level) {
-  const dict = await dictionary();
+  const [dict, words] = await Promise.all([
+    dictionary().catch(() => null), // without it, swapping still works, just without 住在 phrases
+    level === MY_LEVEL ? loadMine() : load(),
+  ]);
   // A dictionary check lets 住在 count as 住 + 在 (and "live in" become 住在),
   // while real words like 现在 stay whole.
-  const options = { isWord: (zh) => dict.has(zh) };
-  let map;
+  const options = dict ? { isWord: (zh) => dict.has(zh) } : {};
+  let map = words;
   if (level === MY_LEVEL) {
-    const { map: myMap, known } = await loadMine();
-    map = myMap;
-    options.knownPrep = (p) => known.has(p); // 在/到/给/成 only if they're on the list
-  } else {
-    map = await load();
+    map = words.map;
+    options.knownPrep = (p) => words.known.has(p); // 在/到/给/成 only if they're on the list
   }
   return items.map((item, i) => (translations[i] == null ? null : diglotItem(item, translations[i], map, level, options)));
 }
