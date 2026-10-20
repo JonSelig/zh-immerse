@@ -131,13 +131,17 @@ the Command Line Tools with a macOS 26.4+ SDK.
 | `npm run lint` | `web-ext lint` (Firefox) |
 | `npm run harness` | Serves `test/fixtures/` at <http://localhost:8787> with the real content script and a stand-in extension API, for testing page behaviour in any browser. Uses Apple Translation when the language pack is installed, otherwise a stand-in translator. |
 
+Browser behaviour the tests can't reach (voices, shortcuts, Firefox profile
+upgrades) is listed in [docs/manual-checks.md](docs/manual-checks.md); run
+through it before a release.
+
 Layout:
 
 - `native-host/`: Swift native-messaging host, plus build and install scripts
 - `src/background/`: native connection, translation queue and cache (IndexedDB), dictionary, word history
 - `src/content/`: page translator, hover popup, pinyin ruby
 - `src/shared/`: pure logic shared with tests (pinyin, text, dictionary, graded levels, history/export)
-- `src/popup/`, `src/vocab/`: toolbar popup and word-list page
+- `src/popup/`, `src/vocab/`, `src/mywords/`: toolbar popup, word-list page and My words page
 - `extension/`: Firefox manifest, static HTML/CSS, icons, generated `dist/` and `data/`
 - `build/chrome/`: generated Chrome build (`extension/` plus a Chrome manifest made by `scripts/build.mjs`)
 
