@@ -7,7 +7,7 @@ import { buildMyWordMap, cleanMyWords } from '../shared/mywords.js';
 import { dictionary } from './dictionary.js';
 
 let loading = null;
-let mine = null; // My words map; rebuilt after the list changes
+let mine = null; // My words { map, known }; rebuilt after the list changes
 
 function load() {
   loading ??= fetch(browser.runtime.getURL('data/hsk-words.txt'))
@@ -19,7 +19,10 @@ function load() {
 
 function loadMine() {
   mine ??= Promise.all([browser.storage.local.get({ myWords: [] }), dictionary()])
-    .then(([{ myWords }, dict]) => buildMyWordMap(cleanMyWords(myWords), (zh) => dict.get(zh) ?? []))
+    .then(([{ myWords }, dict]) => {
+      const list = cleanMyWords(myWords);
+      return { map: buildMyWordMap(list, (zh) => dict.get(zh) ?? []), known: new Set(list.map((w) => w.zh)) };
+    })
     .catch((err) => { mine = null; throw err; });
   return mine;
 }
@@ -30,6 +33,17 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 /** items/translations as sent to and returned by the translator. */
 export async function gradeItems(items, translations, level) {
-  const map = await (level === MY_LEVEL ? loadMine() : load());
-  return items.map((item, i) => (translations[i] == null ? null : diglotItem(item, translations[i], map, level)));
+  const dict = await dictionary();
+  // A dictionary check lets 住在 count as 住 + 在 (and "live in" become 住在),
+  // while real words like 现在 stay whole.
+  const options = { isWord: (zh) => dict.has(zh) };
+  let map;
+  if (level === MY_LEVEL) {
+    const { map: myMap, known } = await loadMine();
+    map = myMap;
+    options.knownPrep = (p) => known.has(p); // 在/到/给/成 only if they're on the list
+  } else {
+    map = await load();
+  }
+  return items.map((item, i) => (translations[i] == null ? null : diglotItem(item, translations[i], map, level, options)));
 }

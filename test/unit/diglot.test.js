@@ -80,3 +80,68 @@ test('replacedAt finds the English behind the character at an offset', () => {
   assert.equal(replacedAt(swaps, 7), '');
   assert.equal(replacedAt(null, 0), '');
 });
+
+// Verb + 在/到/给/成 glued by the segmenter (住在 "live in"). `isWord` stands in
+// for CC-CEDICT: real words like 现在 are never split.
+const verbMap = parseWordMap(['live\t住:1', 'sit\t坐:1', 'put\t放:1', 'now\t现在:1', 'just\t正:1'].join('\n'));
+const DICT_WORDS = new Set(['现在', '正在', '中国', '哪里', '桌子', '椅子']);
+const isWord = (s) => DICT_WORDS.has(s);
+const swapWith = (en, zh, level, opts) => applySwaps(en, findSwaps(en, verbMap, level, translationWords(zh, isWord), { isWord, ...opts })).text;
+
+test('a verb glued to 在 by the segmenter still counts as a word', () => {
+  const inTranslation = translationWords('我住在中国。', isWord);
+  assert.ok(inTranslation('住'));
+  assert.ok(!translationWords('我住在中国。')('住')); // without a dictionary, nothing is split
+  assert.ok(!translationWords('他现在很忙。', isWord)('现')); // real words stay whole
+  // Only verb + 在/到/给/成 pairs are split, not any non-word pair.
+  assert.ok(!translationWords('他看书。', isWord)('看')); // 看书 isn't in the test dictionary either
+});
+
+// A word must be confirmed by its own sentence's translation when the
+// English and Chinese have the same number of sentences.
+const stopMap = parseWordMap(['live\t住:1', 'stop\t住:1'].join('\n'));
+const BLOCK_EN = 'I live in China. She ran to the bus stop.';
+const BLOCK_ZH = '我住在中国。她跑到了公交车站。';
+
+test('each sentence is checked against its own translation', () => {
+  const out = diglotItem(BLOCK_EN, BLOCK_ZH, stopMap, 1, { isWord });
+  assert.deepEqual(out.segments, ['I 住在 China. She ran to the bus stop.']);
+  assert.equal(out.full, BLOCK_ZH);
+});
+
+test('sentence matching works across segments', () => {
+  const out = diglotItem(['I live in China. She ', 'ran', ' to the bus stop.'], ['我住在中国。她', '跑到了', '公交车站。'], stopMap, 1, { isWord });
+  assert.deepEqual(out.segments, ['I 住在 China. She ', 'ran', ' to the bus stop.']);
+  assert.deepEqual(out.ranges, [[[2, 4, 'live in']], [], []]);
+});
+
+test('different sentence counts fall back to the whole paragraph', () => {
+  // One Chinese sentence for two English ones: no alignment, so 住 anywhere counts.
+  const out = diglotItem(BLOCK_EN, '我住在中国，她跑到了公交车站住。', stopMap, 1, { isWord });
+  assert.equal(out.segments[0], 'I 住在 China. She ran to the bus 住.');
+});
+
+test('verb + matching preposition becomes one Chinese phrase', () => {
+  assert.equal(swapWith('I live in China.', '我住在中国。', 1), 'I 住在 China.');
+  assert.equal(swapWith('She sat on the chair.', '她坐在椅子上。', 1), 'She 坐在 the chair.');
+});
+
+test('without a matching preposition only the verb is swapped', () => {
+  assert.equal(swapWith('Where do you live?', '你住在哪里？', 1), 'Where do you 住?');
+  assert.equal(swapWith('Put the book on the table.', '把书放在桌子上。', 1), '放 the book on the table.');
+});
+
+test('the phrase needs its preposition to be known at the level', () => {
+  // Level 0 (My words): the map's candidates are level 0; 在 must be on the list.
+  const mine = parseWordMap('live\t住:0');
+  const swap0 = (knownPrep) => applySwaps('I live in China.',
+    findSwaps('I live in China.', mine, 0, translationWords('我住在中国。', isWord), { isWord, knownPrep })).text;
+  assert.equal(swap0(() => false), 'I 住 in China.');
+  assert.equal(swap0((p) => p === '在'), 'I 住在 China.');
+  assert.equal(swapWith('I live in China.', '我住在中国。', 0), 'I live in China.'); // HSK default: nothing at level 0
+});
+
+test('a phrase swap records the English it replaced', () => {
+  const out = diglotItem('I live in China.', '我住在中国。', verbMap, 1, { isWord });
+  assert.deepEqual(out.ranges, [[[2, 4, 'live in']]]);
+});
