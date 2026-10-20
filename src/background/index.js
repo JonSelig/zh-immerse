@@ -31,11 +31,19 @@ function siteOf(sender) {
 
 const EXTENSION_BASE = browser.runtime.getURL('');
 
+// Size of My words, cached for the empty-list check on every translate message.
+let myCount = null;
+const myWordCount = () => (myCount ??= browser.storage.local.get({ myWords: [] })
+  .then(({ myWords }) => (Array.isArray(myWords) ? myWords.length : 0)));
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && 'myWords' in changes) myCount = null;
+});
+
 const handlers = {
   async translate({ items, level = FULL_LEVEL }, sender) {
     try {
       // 我的 with an empty list swaps nothing: don't translate at all.
-      if (level === MY_LEVEL && !(await browser.storage.local.get({ myWords: [] })).myWords.length) {
+      if (level === MY_LEVEL && !(await myWordCount())) {
         return { graded: items.map(ungradedItem) };
       }
       const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender) });

@@ -35,8 +35,9 @@ async function fetchEntries(list) {
   const missing = [...new Set(list)].filter((zh) => !dict.has(zh) && zh.length <= 16);
   for (let i = 0; i < missing.length; i += LOOKUP_BATCH) {
     const batch = missing.slice(i, i + LOOKUP_BATCH);
-    const found = await send({ type: 'dictEntries', words: batch }).catch(() => ({}));
-    for (const zh of batch) dict.set(zh, found?.[zh] ?? []);
+    const found = await send({ type: 'dictEntries', words: batch }).catch(() => null);
+    if (!found) continue; // try again on the next load instead of caching "no entries"
+    for (const zh of batch) dict.set(zh, found[zh] ?? []);
   }
 }
 
@@ -90,7 +91,7 @@ function editCell(td, w) {
   });
   input.addEventListener('blur', () => {
     if (!cancelled && input.value.trim() !== w.en) save(editWord(words, w.zh, input.value));
-    else td.textContent = w.en || '—';
+    else render(); // also picks up changes another tab made while editing
   });
   td.replaceChildren(input);
   input.focus();
@@ -126,7 +127,7 @@ function render() {
 
 async function load() {
   ({ myWords: words = [] } = await browser.storage.local.get('myWords'));
-  render();
+  if (!editing()) render();
   await fetchEntries(words.map((w) => w.zh)); // pinyin and search
   if (!editing()) render();
 }
@@ -228,10 +229,13 @@ $('query').addEventListener('input', () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !editing()) load(); });
 
 // Another My words tab (or window) changed the list: follow it, so a save
-// here starts from the latest list instead of overwriting that change.
+// here starts from the latest list (this narrows, but can't fully close, the
+// window in which two tabs saving at once lose one change).
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !('myWords' in changes)) return;
-  words = changes.myWords.newValue ?? [];
+  const next = changes.myWords.newValue ?? [];
+  if (JSON.stringify(next) === JSON.stringify(words)) return; // our own save
+  words = next;
   if (!editing()) render();
   fetchEntries(words.map((w) => w.zh)).then(() => { if (!editing()) render(); });
 });
