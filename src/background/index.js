@@ -3,9 +3,9 @@
 
 import { translateItems, clearCache } from './translator.js';
 import { gradeItems } from './graded.js';
-import { FULL_LEVEL } from '../shared/diglot.js';
+import { FULL_LEVEL, MY_LEVEL, ungradedItem } from '../shared/diglot.js';
 import { hostStatus } from './native.js';
-import { lookup } from './dictionary.js';
+import { lookup, dictionary } from './dictionary.js';
 import * as words from './words.js';
 import { DEFAULT_SETTINGS } from '../shared/settings.js';
 import { pageUrl } from '../shared/history.js';
@@ -34,6 +34,10 @@ const EXTENSION_BASE = browser.runtime.getURL('');
 const handlers = {
   async translate({ items, level = FULL_LEVEL }, sender) {
     try {
+      // 我的 with an empty list swaps nothing: don't translate at all.
+      if (level === MY_LEVEL && !(await browser.storage.local.get({ myWords: [] })).myWords.length) {
+        return { graded: items.map(ungradedItem) };
+      }
       const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender) });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };
@@ -65,6 +69,11 @@ const handlers = {
     const myWords = cleanMyWords(list);
     await browser.storage.local.set({ myWords });
     return { count: myWords.length };
+  },
+  // CC-CEDICT entries for many words at once (the My words page).
+  async dictEntries({ words: list }) {
+    const dict = await dictionary();
+    return Object.fromEntries(list.map((w) => [w, dict.get(w) ?? []]));
   },
   wordStats: () => words.stats(),
   hostStatus: () => hostStatus(),

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, ungradedItem } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -79,4 +79,9 @@ test('replacedAt finds the English behind the character at an offset', () => {
   assert.equal(replacedAt(swaps, 4), '');
   assert.equal(replacedAt(swaps, 7), '');
   assert.equal(replacedAt(null, 0), '');
+});
+
+test('ungradedItem leaves the English as it is', () => {
+  assert.deepEqual(ungradedItem('Hello there.'), { segments: ['Hello there.'], ranges: [[]], full: null });
+  assert.deepEqual(ungradedItem(['Read the ', 'docs', '.']), { segments: ['Read the ', 'docs', '.'], ranges: [[], [], []], full: null });
 });

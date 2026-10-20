@@ -6,7 +6,7 @@ import { MAX_MY_WORDS } from '../shared/mywords.js';
 
 /** Handlers only extension pages (popup, word list, My words) may call: they
  * read, import or wipe the whole history, replace My words, or clear the cache. */
-export const PAGE_ONLY = new Set(['listWords', 'deleteWord', 'importWords', 'clearCache', 'setMyWords']);
+export const PAGE_ONLY = new Set(['listWords', 'deleteWord', 'importWords', 'clearCache', 'setMyWords', 'dictEntries']);
 
 // Far above what the page translator sends (one block of the page per
 // message, see content/translate.js); these only stop abuse.
@@ -32,5 +32,7 @@ export function refusal(msg, sender, base) {
   // MAX_LOOKUP characters, each up to two UTF-16 units.
   if (msg.type === 'lookup' && (typeof msg.text !== 'string' || msg.text.length > MAX_LOOKUP * 2)) return 'bad lookup text';
   if (msg.type === 'setMyWords' && (!Array.isArray(msg.words) || msg.words.length > MAX_MY_WORDS)) return 'bad word list';
+  if (msg.type === 'dictEntries' && (!Array.isArray(msg.words) || msg.words.length > MAX_MY_WORDS
+    || !msg.words.every((w) => typeof w === 'string' && w.length <= 32))) return 'bad word list';
   return null;
 }
