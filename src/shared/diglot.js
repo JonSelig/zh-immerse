@@ -263,3 +263,9 @@ export function swapAt(ranges, offset) {
 export function replacedAt(ranges, offset) {
   return swapAt(ranges, offset)?.[2] ?? '';
 }
+
+/** A graded result with nothing swapped (the item's English as it is). */
+export function ungradedItem(item) {
+  const segments = Array.isArray(item) ? item : [item];
+  return { segments, ranges: segments.map(() => []), full: null };
+}

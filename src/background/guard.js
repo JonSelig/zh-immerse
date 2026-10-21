@@ -7,7 +7,7 @@ import { MAX_MY_WORDS } from '../shared/mywords.js';
 /** Handlers only extension pages (popup, word list, My words) may call: they
  * read, import or wipe the whole history or the swap reports, replace My
  * words, or clear the cache. */
-export const PAGE_ONLY = new Set(['listWords', 'deleteWord', 'importWords', 'clearCache', 'setMyWords',
+export const PAGE_ONLY = new Set(['listWords', 'deleteWord', 'importWords', 'clearCache', 'setMyWords', 'dictEntries',
   'listSwapReports', 'deleteSwapReport', 'clearSwapReports']);
 
 // Far above what the page translator sends (one block of the page per
@@ -28,13 +28,15 @@ function itemChars(item) {
 /** null if the message may be handled, otherwise why it was refused. */
 export function refusal(msg, sender, base) {
   if (PAGE_ONLY.has(msg.type) && !fromExtensionPage(sender, base)) return 'only allowed from extension pages';
-  if (msg.type === 'translate') {
+  if (msg.type === 'translate' || msg.type === 'prioritize') {
     if (!Array.isArray(msg.items) || msg.items.length > MAX_ITEMS) return 'too many items';
     if (msg.items.reduce((n, item) => n + itemChars(item), 0) > MAX_CHARS) return 'too much text';
   }
   // MAX_LOOKUP characters, each up to two UTF-16 units.
   if (msg.type === 'lookup' && (typeof msg.text !== 'string' || msg.text.length > MAX_LOOKUP * 2)) return 'bad lookup text';
   if (msg.type === 'setMyWords' && (!Array.isArray(msg.words) || msg.words.length > MAX_MY_WORDS)) return 'bad word list';
+  if (msg.type === 'dictEntries' && (!Array.isArray(msg.words) || msg.words.length > MAX_MY_WORDS
+    || !msg.words.every((w) => typeof w === 'string' && w.length <= 32))) return 'bad word list';
   if (msg.type === 'reportSwap') {
     const fields = ['swapEn', 'swapZh', 'en', 'zh', 'url'].map((k) => msg[k]);
     if (!fields.every((s) => typeof s === 'string' && s.length <= MAX_REPORT_FIELD)

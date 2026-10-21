@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, swapAt } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, swapAt, ungradedItem } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -224,4 +224,9 @@ test('a blocked phrase only keeps its first word English', () => {
   // "Last" must not become 去 (from 我去 "I went"), even though "last week" is above the level.
   assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 1, translationWords(week))), []);
   assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 2, translationWords(week))), [['Last week', '上周']]);
+});
+
+test('ungradedItem leaves the English as it is', () => {
+  assert.deepEqual(ungradedItem('Hello there.'), { segments: ['Hello there.'], ranges: [[]], full: null });
+  assert.deepEqual(ungradedItem(['Read the ', 'docs', '.']), { segments: ['Read the ', 'docs', '.'], ranges: [[], [], []], full: null });
 });
