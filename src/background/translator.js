@@ -18,7 +18,7 @@ import { Lanes } from '../shared/queue.js';
 // One request in flight, so each next item is picked from the latest
 // on-screen requests.
 const BATCH_ITEMS = 1;
-const BATCH_CHARS = 3000;
+const BATCH_CHARS = 3000; // only matters if BATCH_ITEMS is raised again
 const MAX_IN_FLIGHT = 1;
 const MEMORY_CAP = 5000;
 const STORED_CAP = 50_000; // rows kept in IndexedDB, oldest dropped first

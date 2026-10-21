@@ -41,9 +41,11 @@ function skipElement(el) {
     || el.isContentEditable;
 }
 
-/** True if a rect (from getBoundingClientRect) is at least partly in the viewport. */
+/** True if a rect (from getBoundingClientRect) is at least partly in the
+ * viewport of a tab the user is looking at (hidden tabs report rects too). */
 function onScreen(rect) {
-  return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+  return document.visibilityState === 'visible'
+    && rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
 }
 
 function insideSkipped(node) {
@@ -77,7 +79,7 @@ export class PageTranslator {
 
   reset() {
     this.blockCache = new WeakMap(); // element -> boolean (non-inline display)
-    this.units = new WeakMap(); // unit element -> { status, seq, segs, en, zh, dirty }
+    this.units = new WeakMap(); // unit element -> { status, seq, segs, en, zh, full, dirty, items (while pending) }
     this.segs = new WeakMap(); // text node -> seg { node, en, zh, unit, ruby, swaps, marks }
     this.allSegs = new Set();
     this.rubyOwner = new WeakMap(); // ruby span -> seg
@@ -271,9 +273,10 @@ export class PageTranslator {
     return groups.filter((g) => g.length && looksEnglish(g.map((s) => s.en).join('')));
   }
 
-  async translateUnit(unit, urgent = onScreen(unit.getBoundingClientRect())) {
+  async translateUnit(unit, urgent = null) {
     const state = this.units.get(unit);
     if (!this.active || !state || this.blocked || !unit.isConnected) return;
+    urgent ??= onScreen(unit.getBoundingClientRect());
     const groups = this.collect(unit);
     if (!groups.length) { state.status = 'done'; return; }
 
@@ -290,18 +293,25 @@ export class PageTranslator {
     state.items = items;
     if (!urgent) this.seen.observe(unit);
 
+    // Superseded by a newer request for this unit, or by stop()/start()
+    // (a level change), which made new units and a new `seen` observer.
+    const stale = () => !this.active || this.units.get(unit) !== state || state.seq !== seq;
+
     let results;
     try {
       results = await this.translateFn(items, this.level, urgent);
     } catch (err) {
-      this.seen.unobserve(unit);
-      state.status = 'observed';
       if (['hostMissing', 'notInstalled', 'unsupported'].includes(err.code)) this.blocked = err.code;
       this.onError(err);
+      if (stale()) return;
+      this.seen.unobserve(unit);
+      state.status = 'observed';
+      state.items = null;
       return;
     }
-    if (!this.active || state.seq !== seq) return;
+    if (stale()) return;
     this.seen.unobserve(unit);
+    state.items = null;
 
     const fulls = [];
     this.withoutObserver(() => {

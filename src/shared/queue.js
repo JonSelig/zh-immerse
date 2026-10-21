@@ -1,6 +1,8 @@
 // Order in which waiting translations go to the native host: text on screen
 // first, then text the page asked for ahead of scrolling. Each lane keeps the
-// order keys arrived in.
+// order keys arrived in. While any tab keeps sending on-screen text, look-ahead
+// text waits; it only loses its head start, since it's promoted once it
+// scrolls into view.
 
 export class Lanes {
   constructor() {
