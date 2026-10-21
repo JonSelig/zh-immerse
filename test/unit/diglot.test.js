@@ -200,9 +200,20 @@ test('at 我的, a competitor that is also on the list is known', () => {
     [['right', '右边']]);
 });
 
-test('a blocked phrase keeps its words English', () => {
+test('a blocked phrase keeps its first word English', () => {
   const map2 = parseWordMap(['bus stop\t公交车站:3', 'bus\t公交车:2', 'stop\t站:1'].join('\n'));
   const zh = '他在公交车站等。';
   assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 2, translationWords(zh))), []);
   assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 3, translationWords(zh))), [['bus stop', '公交车站']]);
+});
+
+test('a blocked phrase only keeps its first word English', () => {
+  const m = parseWordMap(['last month\t上个月:4', 'last week\t上周:2', 'last\t去:1,最后:1', 'month\t月:1,月份:2', 'week\t周:1,星期:1'].join('\n'));
+  const month = '新学校上个月开业了。';
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 1, translationWords(month))), [['month', '月']]);
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 4, translationWords(month))), [['last month', '上个月']]);
+  const week = '上周我去看望了我的祖母。';
+  // "Last" must not become 去 (from 我去 "I went"), even though "last week" is above the level.
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 1, translationWords(week))), []);
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 2, translationWords(week))), [['Last week', '上周']]);
 });

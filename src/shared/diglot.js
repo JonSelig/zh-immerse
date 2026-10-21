@@ -162,10 +162,7 @@ export function findSwaps(text, map, level, inTranslation, {
       // known, otherwise leave the English (right -> 右边, never 是 "is").
       const longest = Math.max(...present.map((c) => c.zh.length));
       const entry = present.find((c) => c.zh.length === longest && c.level <= level);
-      if (!entry) {
-        i += n - 1; // the whole phrase stays English
-        break;
-      }
+      if (!entry) break; // this word stays English; the rest of a phrase is checked on its own
       const start = span[0].start;
       let end = span.at(-1).end;
       let { zh } = entry;
