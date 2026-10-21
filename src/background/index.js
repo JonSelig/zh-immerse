@@ -12,6 +12,7 @@ import { pageUrl } from '../shared/history.js';
 import { refusal } from './guard.js';
 import { onMessage, sendToTab } from '../shared/messaging.js';
 import { cleanMyWords } from '../shared/mywords.js';
+import * as reports from './reports.js';
 
 const wordInfo = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url: pageUrl(url) });
 
@@ -61,6 +62,10 @@ const handlers = {
   listWords: () => words.listWords(),
   deleteWord: ({ word }) => words.deleteWord(word),
   importWords: ({ records }) => words.importWords(records),
+  reportSwap: (msg, sender) => reports.reportSwap(msg, { incognito: isPrivate(sender) }),
+  listSwapReports: () => reports.listReports(),
+  deleteSwapReport: ({ id }) => reports.deleteReport(id),
+  clearSwapReports: () => reports.clearReports(),
   async setMyWords({ words: list }) {
     const myWords = cleanMyWords(list);
     await browser.storage.local.set({ myWords });

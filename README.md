@@ -41,6 +41,8 @@ At 我的, a site's own scripts can see which words were swapped in, and so lear
 words on your list; turn translation off for that site in the popup if that
 matters.
 Saved example sentences keep the page's address without its query string.
+Reported swaps (⚑ Report in the popup) are stored the same way, and leave the
+machine only if you export them.
 In private windows (if you allow the extension there) nothing is cached or
 counted.
 
