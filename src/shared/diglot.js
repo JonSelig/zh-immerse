@@ -254,7 +254,12 @@ export function diglotItem(item, translation, map, level, options = {}) {
   return out;
 }
 
+/** The swap range [start, end, en] covering `offset`, or null. */
+export function swapAt(ranges, offset) {
+  return ranges?.find(([start, end]) => offset >= start && offset < end) ?? null;
+}
+
 /** The English replaced by the swapped word covering `offset`, or ''. */
 export function replacedAt(ranges, offset) {
-  return ranges?.find(([start, end]) => offset >= start && offset < end)?.[2] ?? '';
+  return swapAt(ranges, offset)?.[2] ?? '';
 }
