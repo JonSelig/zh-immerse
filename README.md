@@ -15,8 +15,10 @@ reading aids are there when a sentence is too hard:
 - **Lookup history**: every word you rest on for more than 0.6 s is counted,
   with the sentences you met it in. Press **S** in the popup to save a word.
 - **Word list** (toolbar popup → *Open word list*): sort by most looked up,
-  filter by count or date, and export to Anki (TSV) or a JSON backup.
-  *Backup → Clear translation cache* deletes the saved translations.
+  filter by count or date, and export to Anki (TSV) or a JSON backup. Swaps
+  that look wrong can be flagged with ⚑ Report in the popup; they're listed
+  under *Reported swaps* and can be exported as JSON. *Backup → Clear
+  translation cache* deletes the saved translations.
 - **Levels** (toolbar popup): 1–6 swap only words from HSK 3.0 levels 1 up to
   that level into Chinese and leave the rest in English ("The 天气 is nice
   今天, so we are 去 for a walk in the 公园."); **全部** translates everything.

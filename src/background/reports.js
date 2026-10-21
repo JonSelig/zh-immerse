@@ -8,7 +8,7 @@ let queue = Promise.resolve();
 
 async function read() {
   const { [KEY]: list } = await browser.storage.local.get(KEY);
-  return Array.isArray(list) ? list : [];
+  return Array.isArray(list) ? list.filter((r) => r && typeof r === 'object') : [];
 }
 
 function update(change) {

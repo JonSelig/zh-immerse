@@ -166,8 +166,11 @@ function render() {
     $('empty').textContent = 'No reported swaps. On a page at a graded level, hover a swapped word and click ⚑ Report.';
     $('exportReports').disabled = !reports.length;
     $('clearReports').disabled = !reports.length;
+    $('exportNote').hidden = true;
     return;
   }
+
+  $('exportNote').hidden = false;
 
   const list = visibleWords();
   $('rows').replaceChildren(...list.flatMap(row));
@@ -196,7 +199,7 @@ function download(name, type, text) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 async function load() {
-  [words, reports] = await Promise.all([send({ type: 'listWords' }), send({ type: 'listSwapReports' })]);
+  [words, reports] = await Promise.all([send({ type: 'listWords' }), send({ type: 'listSwapReports' }).catch(() => [])]);
   render();
 }
 
