@@ -3,11 +3,13 @@
 
 import { filterWords, sortWords, toAnkiTSV, cleanRecord, pageUrl } from '../shared/history.js';
 import { syllables } from '../shared/pinyin.js';
+import { exportReports } from '../shared/reports.js';
 import { sendMessage as send } from '../shared/messaging.js';
 
 const $ = (id) => document.getElementById(id);
 
 let words = [];
+let reports = [];
 let tab = 'lookups';
 const expanded = new Set();
 
@@ -37,8 +39,9 @@ const startOfDay = (ts) => new Date(ts).setHours(0, 0, 0, 0);
 const startOfToday = () => startOfDay(Date.now());
 
 /** Highlights `word` inside an example sentence. */
-function markWord(sentence, word) {
-  const out = h('span', { className: 'zh' });
+function markWord(sentence, word, className = 'zh') {
+  if (!word) return h('span', { className, textContent: sentence });
+  const out = h('span', { className });
   const parts = sentence.split(word);
   parts.forEach((part, i) => {
     if (i) out.append(h('mark', { textContent: word }));
@@ -117,11 +120,32 @@ function hostOf(url) {
   try { return new URL(url).hostname; } catch { return url; }
 }
 
+const levelName = (level) => (level === 0 ? '我的' : `HSK ${level}`);
+
+function reportRow(r) {
+  const del = h('button', { className: 'icon', title: 'Delete this report', textContent: '✕' });
+  del.addEventListener('click', async () => {
+    reports = await send({ type: 'deleteSwapReport', id: r.id });
+    render();
+  });
+  const href = pageUrl(r.url);
+  return h('div', { className: 'report' },
+    h('div', { className: 'report-head' },
+      h('span', { className: 'pair' }, `${r.swapEn} → `, h('span', { className: 'zh', textContent: r.swapZh })),
+      h('span', { className: 'muted', textContent: ` · ${levelName(r.level)} · ${relativeDay(r.ts)}` }),
+      href ? h('a', { href, target: '_blank', rel: 'noreferrer', textContent: hostOf(href) }) : null,
+      h('span', { className: 'spacer' }),
+      del),
+    r.en ? h('div', { className: 'en' }, markWord(r.en, r.swapEn, 'en-text')) : null,
+    r.zh ? h('div', { className: 'zh muted', textContent: r.zh }) : null);
+}
+
 function render() {
   const lookups = words.filter((w) => w.count > 0);
   const saved = words.filter((w) => w.saved);
   $('countLookups').textContent = lookups.length;
   $('countSaved').textContent = saved.length;
+  $('countReports').textContent = reports.length;
   const total = lookups.reduce((n, w) => n + w.count, 0);
   $('summary').textContent = words.length
     ? `${lookups.length} words, ${total} lookups in total. Click a row to see the sentences you met it in.`
@@ -129,6 +153,20 @@ function render() {
 
   for (const b of document.querySelectorAll('.tabs button')) {
     b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+  }
+
+  const onReports = tab === 'reports';
+  $('wordBar').hidden = onReports;
+  $('wordTable').hidden = onReports;
+  $('reportBar').hidden = !onReports;
+  $('reports').hidden = !onReports;
+  if (onReports) {
+    $('reports').replaceChildren(...reports.map(reportRow));
+    $('empty').hidden = reports.length > 0;
+    $('empty').textContent = 'No reported swaps. On a page at a graded level, hover a swapped word and click ⚑ Report.';
+    $('exportReports').disabled = !reports.length;
+    $('clearReports').disabled = !reports.length;
+    return;
   }
 
   const list = visibleWords();
@@ -158,7 +196,7 @@ function download(name, type, text) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 async function load() {
-  words = await send({ type: 'listWords' });
+  [words, reports] = await Promise.all([send({ type: 'listWords' }), send({ type: 'listSwapReports' })]);
   render();
 }
 
@@ -175,6 +213,14 @@ $('exportTsv').addEventListener('click', () => {
 $('exportJson').addEventListener('click', () => {
   const clean = words.map(cleanRecord).filter(Boolean);
   download(`zh-immerse-backup-${today()}.json`, 'application/json', JSON.stringify({ version: 1, words: clean }, null, 1));
+});
+$('exportReports').addEventListener('click', () => {
+  download(`zh-immerse-swap-reports-${today()}.json`, 'application/json', JSON.stringify(exportReports(reports), null, 1));
+});
+$('clearReports').addEventListener('click', async () => {
+  if (!confirm(`Delete all ${reports.length} reported swaps?`)) return;
+  reports = await send({ type: 'clearSwapReports' });
+  render();
 });
 $('importJson').addEventListener('change', async (e) => {
   const file = e.target.files[0];

@@ -95,6 +95,15 @@ mark { background: rgba(255, 196, 0, .45); color: inherit; border-radius: 2px; }
 .zhi-t4 { color: var(--zhi-t4); } .zhi-t5 { color: var(--zhi-t5); }
 .empty { text-align: center; color: var(--muted); padding: 40px 0; }
 
+.report { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.report-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.report-head .pair { font-weight: 600; }
+.report-head .pair .zh { font-size: 18px; }
+.report-head a { color: var(--muted); font-size: 12px; }
+.report-head .spacer { flex: 1; }
+.report .en { margin-top: 4px; }
+.report .zh.muted { font-size: 13px; margin-top: 2px; }
+
 @media (max-width: 720px) {
   th:nth-child(6), td.seen { display: none; }
   td.defs { max-width: none; }
