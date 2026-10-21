@@ -21,7 +21,8 @@
     "presign": "node scripts/bump-version.mjs && npm run build",
     "prelint": "npm run build",
     "bump": "node scripts/bump-version.mjs",
-    "build:hsk": "node scripts/build-hsk.mjs"
+    "build:hsk": "node scripts/build-hsk.mjs",
+    "test:chrome": "npm run build && node test/chrome-e2e.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

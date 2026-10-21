@@ -132,6 +132,7 @@ the Command Line Tools with a macOS 26.4+ SDK.
 | `npm run watch` | Rebuild `extension/dist/` and `build/chrome/` on change (edits to `extension/` HTML/CSS reach `build/chrome/` on the next rebuild) |
 | `npm test` | Unit tests for the shared logic (pinyin, history, export) |
 | `npm run test:host` | Smoke test of the native helper over the real protocol |
+| `npm run test:chrome` | End-to-end test of the Chrome build in headless Chrome with a throwaway profile (your own profile isn't touched): translation through the native helper, links, graded levels, hover and lookup counting, word list, popup, recovery after Chrome stops the service worker, and re-requesting text cancelled by an in-app navigation. Needs `npm run install:host` first. |
 | `npm run lint` | `web-ext lint` (Firefox) |
 | `npm run harness` | Serves `test/fixtures/` at <http://localhost:8787> with the real content script and a stand-in extension API, for testing page behaviour in any browser. Uses Apple Translation when the language pack is installed, otherwise a stand-in translator. |
 

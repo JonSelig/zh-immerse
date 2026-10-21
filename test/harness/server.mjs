@@ -145,6 +145,10 @@ createServer(async (req, res) => {
         <h1>zh-immerse harness</h1><p>Translator: ${host ? 'Apple Translation' : 'mock'}</p><ul>
         ${files.map((f) => `<li><a href="/fixtures/${f}">${f}</a></li>`).join('')}
         <li><a href="/ext/vocab/vocab.html">Word list page</a></li></ul>`);
+    } else if (url.pathname.startsWith('/raw/')) {
+      // Fixtures without the stand-in API, for testing the real extension
+      // (test/chrome-e2e.mjs).
+      await serveFile(res, safeJoin(resolve(root, 'test/fixtures'), url.pathname.slice(5)));
     } else if (url.pathname.startsWith('/fixtures/')) {
       await serveFile(res, safeJoin(resolve(root, 'test/fixtures'), url.pathname.slice(10)), INJECT);
     } else if (url.pathname.startsWith('/ext/')) {
