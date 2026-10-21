@@ -282,7 +282,7 @@ export class PageTranslator {
         if (result == null) return;
         if (result.segments) {
           // Graded: only text nodes with swapped words change.
-          fulls.push(result.full);
+          if (result.full != null) fulls.push(result.full);
           group.forEach((s, i) => {
             if (result.ranges[i]?.length) this.applySegment(s.node, s.en, result.segments[i], unit, result.ranges[i]);
           });
