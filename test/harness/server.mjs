@@ -11,13 +11,13 @@
 
 import { createServer } from 'node:http';
 import { readFile, readdir } from 'node:fs/promises';
-import { resolve, dirname, extname, join, normalize } from 'node:path';
+import { resolve, dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { startHost } from '../../scripts/host-client.mjs';
 import { parseDict, longestMatch } from '../../src/shared/dict.js';
 import { parseWordMap, diglotItem, FULL_LEVEL } from '../../src/shared/diglot.js';
-import { shouldCount, applyLookup, applySaved, mergeRecords, isRecord } from '../../src/shared/history.js';
+import { shouldCount, applyLookup, applySaved, mergeRecords, cleanRecord, pageUrl } from '../../src/shared/history.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const port = Number(process.argv[2] ?? 8787);
@@ -65,7 +65,7 @@ async function translate(items, level = FULL_LEVEL) {
 const dict = parseDict(await readFile(resolve(root, 'extension/data/cedict.txt'), 'utf8'));
 const words = new Map();
 const recent = new Map();
-const pick = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url });
+const pick = ({ word, pinyin, defs, zh, en, url }) => ({ word, pinyin, defs, zh, en, url: pageUrl(url) });
 
 const api = {
   translate: ({ items, level }) => translate(items, level),
@@ -92,12 +92,13 @@ const api = {
   listWords: () => [...words.values()],
   deleteWord: ({ word }) => { words.delete(word); return null; },
   importWords({ records }) {
-    const valid = records.filter(isRecord);
+    const valid = records.map(cleanRecord).filter(Boolean);
     for (const r of valid) words.set(r.word, mergeRecords(words.get(r.word), r));
     return { imported: valid.length, skipped: records.length - valid.length };
   },
   wordStats: () => ({ lookedUp: [...words.values()].filter((w) => w.count > 0).length, saved: [...words.values()].filter((w) => w.saved).length }),
   hostStatus: () => ({ status: 'installed', mock: !host }),
+  clearCache: () => null,
 };
 
 // ---- HTTP ---------------------------------------------------------------
@@ -116,12 +117,18 @@ async function serveFile(res, path, inject) {
 
 function safeJoin(base, rel) {
   const full = normalize(join(base, rel));
-  if (!full.startsWith(base)) throw Object.assign(new Error('forbidden'), { status: 403 });
+  if (!full.startsWith(base + sep)) throw Object.assign(new Error('forbidden'), { status: 403 });
   return full;
 }
 
+// Only this machine, under its own name: the API drives the real translator
+// and holds word history, so other hosts on the network and DNS-rebinding
+// pages (which send their own Host header) are turned away.
+const HOSTS = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+
 createServer(async (req, res) => {
   try {
+    if (!HOSTS.has(req.headers.host)) throw Object.assign(new Error('forbidden'), { status: 403 });
     const url = new URL(req.url, `http://localhost:${port}`);
     if (req.method === 'POST' && url.pathname === '/api') {
       let raw = '';
@@ -150,4 +157,4 @@ createServer(async (req, res) => {
   } catch (err) {
     res.writeHead(err.status ?? (err.code === 'ENOENT' ? 404 : 500)).end(String(err.message));
   }
-}).listen(port, () => console.log(`harness: http://localhost:${port}/`));
+}).listen(port, '127.0.0.1', () => console.log(`harness: http://localhost:${port}/`));

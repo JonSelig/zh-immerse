@@ -5,6 +5,7 @@ import { looksEnglish, sentenceAround, collapseSpace } from '../../src/shared/te
 import { parseDict, longestMatch } from '../../src/shared/dict.js';
 import {
   shouldCount, applyLookup, applySaved, mergeRecords, filterWords, sortWords, toAnkiTSV, DEDUPE_MS,
+  pageUrl, cleanRecord,
 } from '../../src/shared/history.js';
 
 test('tone marks follow standard placement', () => {
@@ -106,4 +107,48 @@ test('filter, sort and Anki export', () => {
   const tsv = toAnkiTSV(words.slice(0, 1)).trim().split('\n');
   assert.equal(tsv[0], '#separator:tab');
   assert.equal(tsv[3], ['学习', 'xué xí', 'to study', '5', '我 学习', 'I study'].join('\t'));
+});
+
+test('pageUrl keeps origin and path of http(s) pages only', () => {
+  assert.equal(pageUrl('https://example.com/news/a?token=secret#top'), 'https://example.com/news/a');
+  assert.equal(pageUrl('http://localhost:8787/x'), 'http://localhost:8787/x');
+  assert.equal(pageUrl('javascript:alert(1)'), '');
+  assert.equal(pageUrl('data:text/html,hi'), '');
+  assert.equal(pageUrl('file:///Users/me/a.html'), '');
+  assert.equal(pageUrl('not a url'), '');
+  assert.equal(pageUrl(undefined), '');
+});
+
+test('cleanRecord rebuilds imported records with safe types', () => {
+  const base = { word: '喜欢', count: 3.7, firstSeen: 1, lastSeen: 2, examples: [] };
+  assert.equal(cleanRecord(null), null);
+  assert.equal(cleanRecord({ ...base, word: '' }), null);
+  assert.equal(cleanRecord({ ...base, word: 'x'.repeat(40) }), null);
+  assert.equal(cleanRecord({ ...base, examples: 'nope' }), null);
+  const r = cleanRecord({
+    ...base,
+    pinyin: 42,
+    defs: { evil: true },
+    saved: 'yes',
+    extra: '<img src=x onerror=alert(1)>',
+    examples: [
+      { zh: '我喜欢', en: 'I like', url: 'javascript:alert(1)', ts: 'soon' },
+      { zh: 7 },
+      null,
+      { zh: '你喜欢吗', url: 'https://a.example/p?session=1' },
+    ],
+  });
+  assert.deepEqual(r, {
+    word: '喜欢',
+    pinyin: '',
+    defs: '',
+    count: 3,
+    firstSeen: 1,
+    lastSeen: 2,
+    examples: [
+      { zh: '我喜欢', en: 'I like', url: '', ts: 2 },
+      { zh: '你喜欢吗', en: '', url: 'https://a.example/p', ts: 2 },
+    ],
+    saved: false,
+  });
 });

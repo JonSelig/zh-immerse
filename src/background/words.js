@@ -1,7 +1,7 @@
 // Lookup history and saved words, persisted in IndexedDB.
 
 import * as db from './db.js';
-import { shouldCount, applyLookup, applySaved, mergeRecords, isRecord } from '../shared/history.js';
+import { shouldCount, applyLookup, applySaved, mergeRecords, cleanRecord } from '../shared/history.js';
 
 const recent = new Map(); // "word\0sentence" -> last counted time
 let chain = Promise.resolve();
@@ -43,7 +43,7 @@ export const deleteWord = (word) => serial(() => db.remove('words', word));
 
 export function importWords(records) {
   return serial(async () => {
-    const valid = (Array.isArray(records) ? records : []).filter(isRecord);
+    const valid = (Array.isArray(records) ? records : []).map(cleanRecord).filter(Boolean);
     const existing = await db.getMany('words', valid.map((r) => r.word));
     await db.putMany('words', valid.map((r, i) => mergeRecords(existing[i], r)));
     return { imported: valid.length, skipped: (records?.length ?? 0) - valid.length };

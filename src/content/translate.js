@@ -11,7 +11,9 @@
 //   as an array of segments; the host returns the Chinese split back into the
 //   same segments, so each link keeps its own (translated) text.
 // - Units are translated when they come near the viewport, and a
-//   MutationObserver picks up content that appears or changes later.
+//   MutationObserver picks up content that appears or changes later. Units
+//   on screen are sent as urgent; a unit sent ahead of scrolling that comes
+//   on screen while still waiting is moved up (prioritize).
 
 import { looksEnglish, collapseSpace } from '../shared/text.js';
 import { makeRuby, RUBY_CLASS } from './ruby.js';
@@ -39,6 +41,13 @@ function skipElement(el) {
     || el.isContentEditable;
 }
 
+/** True if a rect (from getBoundingClientRect) is at least partly in the
+ * viewport of a tab the user is looking at (hidden tabs report rects too). */
+function onScreen(rect) {
+  return document.visibilityState === 'visible'
+    && rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+}
+
 function insideSkipped(node) {
   for (let el = isElement(node) ? node : node.parentElement; el; el = el.parentElement) {
     if (skipElement(el)) return true;
@@ -49,13 +58,17 @@ function insideSkipped(node) {
 export class PageTranslator {
   /**
    * @param {object} opts
-   * @param {(items: Array<string|string[]>, level: number) => Promise<Array<string|string[]|object|null>>} opts.translate
+   * @param {(items: Array<string|string[]>, level: number, urgent: boolean) => Promise<Array<string|string[]|object|null>>} opts.translate
    *   Resolves with one result per item: the full translation (level 7), or at
-   *   levels 1–6 { segments, ranges, full } with only HSK words swapped in.
+   *   levels 0–6 { segments, ranges, full } with only HSK (or My words) words swapped in.
+   *   urgent: the unit is on screen (not just near it).
+   * @param {(items: Array<string|string[]>) => void} [opts.prioritize]
+   *   Asks for items already sent (not urgent) to go first: they're on screen now.
    * @param {(err: Error) => void} [opts.onError]
    */
-  constructor({ translate, onError = () => {} }) {
+  constructor({ translate, prioritize = () => {}, onError = () => {} }) {
     this.translateFn = translate;
+    this.prioritizeFn = prioritize;
     this.onError = onError;
     this.active = false;
     this.pinyin = false;
@@ -66,7 +79,7 @@ export class PageTranslator {
 
   reset() {
     this.blockCache = new WeakMap(); // element -> boolean (non-inline display)
-    this.units = new WeakMap(); // unit element -> { status, seq, segs, en, zh, dirty }
+    this.units = new WeakMap(); // unit element -> { status, seq, segs, en, zh, full, dirty, items (while pending) }
     this.segs = new WeakMap(); // text node -> seg { node, en, zh, unit, ruby, swaps, marks }
     this.allSegs = new Set();
     this.rubyOwner = new WeakMap(); // ruby span -> seg
@@ -82,6 +95,7 @@ export class PageTranslator {
     this.active = true;
     this.blocked = null;
     this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: ROOT_MARGIN });
+    this.seen = new IntersectionObserver((entries) => this.onSeen(entries));
     this.mo = new MutationObserver((records) => this.onMutations(records));
     this.mo.observe(document.body, { subtree: true, childList: true, characterData: true });
     this.queueScan(document.body);
@@ -91,6 +105,7 @@ export class PageTranslator {
     if (!this.active) return;
     this.active = false;
     this.io.disconnect();
+    this.seen.disconnect();
     this.mo.disconnect();
     clearTimeout(this.scanTimer);
     for (const seg of this.allSegs) {
@@ -101,7 +116,7 @@ export class PageTranslator {
     this.reset();
   }
 
-  /** 1–6: swap only HSK words up to that level; 7: translate everything. */
+  /** 0: swap only My words; 1–6: swap only HSK words up to that level; 7: translate everything. */
   setLevel(level) {
     if (this.level === level) return;
     this.level = level;
@@ -206,7 +221,17 @@ export class PageTranslator {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       this.io.unobserve(entry.target);
-      this.translateUnit(entry.target);
+      this.translateUnit(entry.target, onScreen(entry.boundingClientRect));
+    }
+  }
+
+  /** A unit sent ahead of scrolling came on screen. */
+  onSeen(entries) {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      this.seen.unobserve(entry.target);
+      const state = this.units.get(entry.target);
+      if (state?.status === 'pending') this.prioritizeFn(state.items);
     }
   }
 
@@ -248,9 +273,10 @@ export class PageTranslator {
     return groups.filter((g) => g.length && looksEnglish(g.map((s) => s.en).join('')));
   }
 
-  async translateUnit(unit) {
+  async translateUnit(unit, urgent = null) {
     const state = this.units.get(unit);
     if (!this.active || !state || this.blocked || !unit.isConnected) return;
+    urgent ??= onScreen(unit.getBoundingClientRect());
     const groups = this.collect(unit);
     if (!groups.length) { state.status = 'done'; return; }
 
@@ -264,16 +290,28 @@ export class PageTranslator {
       return texts.length === 1 ? texts[0] : texts;
     });
 
+    state.items = items;
+    if (!urgent) this.seen.observe(unit);
+
+    // Superseded by a newer request for this unit, or by stop()/start()
+    // (a level change), which made new units and a new `seen` observer.
+    const stale = () => !this.active || this.units.get(unit) !== state || state.seq !== seq;
+
     let results;
     try {
-      results = await this.translateFn(items, this.level);
+      results = await this.translateFn(items, this.level, urgent);
     } catch (err) {
-      state.status = 'observed';
       if (['hostMissing', 'notInstalled', 'unsupported'].includes(err.code)) this.blocked = err.code;
       this.onError(err);
+      if (stale()) return;
+      this.seen.unobserve(unit);
+      state.status = 'observed';
+      state.items = null;
       return;
     }
-    if (!this.active || state.seq !== seq) return;
+    if (stale()) return;
+    this.seen.unobserve(unit);
+    state.items = null;
 
     const fulls = [];
     this.withoutObserver(() => {
@@ -282,7 +320,7 @@ export class PageTranslator {
         if (result == null) return;
         if (result.segments) {
           // Graded: only text nodes with swapped words change.
-          fulls.push(result.full);
+          if (result.full != null) fulls.push(result.full);
           group.forEach((s, i) => {
             if (result.ranges[i]?.length) this.applySegment(s.node, s.en, result.segments[i], unit, result.ranges[i]);
           });

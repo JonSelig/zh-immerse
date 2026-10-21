@@ -16,3 +16,8 @@ function load() {
 export async function lookup(text) {
   return longestMatch(await load(), text);
 }
+
+/** The whole dictionary: Map of word -> [{ pinyin, defs }]. */
+export function dictionary() {
+  return load();
+}

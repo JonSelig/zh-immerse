@@ -40,12 +40,13 @@
   window.zhi = {
     set: (patch) => browser.storage.local.set(patch),
     reset: () => localStorage.removeItem(SETTINGS_KEY),
-    async message(msg) {
-      for (const fn of messageListeners) {
-        const result = fn(msg);
-        if (result !== undefined) return result;
-      }
-      return undefined;
+    // Listeners reply through sendResponse (see src/shared/messaging.js).
+    message(msg) {
+      return new Promise((resolve) => {
+        const sender = { url: location.href, tab: { id: 1, url: location.href } };
+        const waiting = messageListeners.map((fn) => fn(msg, sender, resolve)).some((r) => r === true);
+        if (!waiting) resolve(undefined);
+      });
     },
     togglePage: () => window.zhi.message({ type: 'togglePage' }),
     state: () => window.zhi.message({ type: 'pageState' }),

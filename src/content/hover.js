@@ -5,8 +5,9 @@
 import { isCJK, sentenceAround } from '../shared/text.js';
 import { syllables } from '../shared/pinyin.js';
 import { MAX_LOOKUP } from '../shared/dict.js';
-import { OWN_ATTR } from './translate.js';
+import { swapAt } from '../shared/diglot.js';
 import { speak, canSpeak } from './speech.js';
+import { createOverlay } from './overlay.js';
 
 const DWELL_MS = 600;
 const HIDE_DELAY_MS = 250;
@@ -66,7 +67,13 @@ export class Hover {
     this.onMove = this.onMove.bind(this);
     this.onKey = this.onKey.bind(this);
     this.onScroll = () => this.hide();
-    this.onDown = (e) => { if (!this.card?.contains(e.target)) this.hide(); };
+    this.onDown = (e) => { if (e.isTrusted && !this.inCard(e)) this.hide(); };
+  }
+
+  /** Events from inside the closed shadow root reach document listeners
+   * retargeted to the overlay host. */
+  inCard(e) {
+    return !!this.overlay && e.target === this.overlay.host;
   }
 
   enable() {
@@ -93,7 +100,10 @@ export class Hover {
   // ---- pointer tracking ------------------------------------------------
 
   onMove(e) {
-    if (this.card?.contains(e.target)) {
+    // Only real pointer movement: a page could otherwise fake hovers to read
+    // the user's lookup counts from the popup or add lookups to the history.
+    if (!e.isTrusted) return;
+    if (this.inCard(e)) {
       clearTimeout(this.hideTimer);
       return;
     }
@@ -109,7 +119,7 @@ export class Hover {
     const pos = document.caretPositionFromPoint(x, y);
     const node = pos?.offsetNode;
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
-    if (node.parentElement?.closest('rt, rp, .zhi-pop')) return null;
+    if (node.parentElement?.closest('rt, rp')) return null;
     for (const offset of [pos.offset, pos.offset - 1]) {
       if (offset < 0 || offset >= node.data.length || !isCJK(node.data[offset])) continue;
       const range = document.createRange();
@@ -153,6 +163,8 @@ export class Hover {
     let zh = hit.node.data;
     let offset = hit.offset;
     let en = '';
+    let replaced = '';
+    let swapZh = '';
     if (info) {
       const { seg, state } = info;
       const inSeg = nodes.slice(0, index).reduce((n, t) => n + t.data.length, 0) + hit.offset;
@@ -161,11 +173,18 @@ export class Hover {
       zh = state?.zh || seg.zh;
       offset = (segIndex > 0 ? before.slice(0, segIndex).reduce((n, s) => n + s.zh.length, 0) : 0) + inSeg;
       en = state?.en || seg.en;
+      // At graded levels: the English word this Chinese word was swapped in
+      // for, and the Chinese shown (for ⚑ Report).
+      const swap = swapAt(seg.swaps, inSeg);
+      if (swap) {
+        replaced = swap[2];
+        swapZh = seg.zh.slice(swap[0], swap[1]);
+      }
     }
     // At graded levels the page shows mixed English/Chinese; the example
     // sentence (saved with lookups and read aloud) is the full Chinese.
     const full = info?.state?.full ?? null;
-    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full };
+    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full, replaced, swapZh };
   }
 
   async lookup(text) {
@@ -214,18 +233,19 @@ export class Hover {
   // ---- popup -----------------------------------------------------------
 
   ensureCard() {
-    if (this.card?.isConnected) return;
+    if (this.overlay?.host.isConnected) return;
+    this.overlay = createOverlay();
     this.card = el('div', 'zhi-pop');
-    this.card.setAttribute(OWN_ATTR, '');
     this.card.hidden = true;
     this.card.addEventListener('mouseleave', () => this.scheduleHide());
     this.card.addEventListener('click', (e) => {
+      if (!e.isTrusted) return;
       if (e.target.closest('.zhi-pop-save')) this.toggleSave();
+      else if (e.target.closest('.zhi-pop-report')) this.report();
       else if (e.target.closest('.zhi-pop-say-word')) this.say('word');
       else if (e.target.closest('.zhi-pop-say-sentence')) this.say('sentence');
     });
-    // Outside <body>, so the page translator's MutationObserver never sees it.
-    document.documentElement.append(this.card);
+    this.overlay.root.append(this.card);
   }
 
   show(current) {
@@ -240,7 +260,7 @@ export class Hover {
   }
 
   render() {
-    const { match, en } = this.current;
+    const { match, en, replaced } = this.current;
     const state = this.wordState.get(match.word) ?? { count: 0, saved: false };
     const card = this.card;
     card.replaceChildren();
@@ -254,6 +274,11 @@ export class Hover {
     }
     head.append(pinyinNode(match.entries[0].pinyin));
     card.append(head);
+    if (replaced) {
+      const line = el('div', 'zhi-pop-replaced', 'replaces ');
+      line.append(el('b', null, `“${replaced}”`));
+      card.append(line);
+    }
 
     const multi = new Set(match.entries.map((e) => e.pinyin.toLowerCase())).size > 1;
     const list = el('div', 'zhi-pop-entries');
@@ -279,6 +304,12 @@ export class Hover {
     const save = el('span', 'zhi-pop-save', state.saved ? '★ Saved ' : '☆ Save ');
     save.append(el('span', 'zhi-pop-key', 'S'));
     actions.append(save);
+    if (this.current.replaced) {
+      const done = this.current.reported;
+      const report = el('span', done ? 'zhi-pop-reported' : 'zhi-pop-report', done ?? '⚑ Report');
+      if (!done) report.title = 'Report this as a wrong swap';
+      actions.append(report);
+    }
     foot.append(actions, el('span', 'zhi-pop-count', state.count ? `looked up ${state.count}×` : 'new word'));
     card.append(foot);
     card.hidden = false;
@@ -361,6 +392,29 @@ export class Hover {
     if (this.current === current) this.render();
   }
 
+  /** Saves this swap as wrong, for later study (word list → Reported swaps). */
+  async report() {
+    const current = this.current;
+    if (!current?.replaced || current.reported) return;
+    let label;
+    try {
+      const { stored } = await this.send({
+        type: 'reportSwap',
+        swapEn: current.replaced,
+        swapZh: current.swapZh,
+        en: (current.en ?? '').slice(0, 2000),
+        zh: (current.full ?? '').slice(0, 2000),
+        level: this.translator.level,
+        url: location.href,
+      });
+      label = stored ? 'Reported ✓' : 'Not saved in private windows';
+    } catch {
+      label = 'Couldn\'t report';
+    }
+    current.reported = label;
+    if (this.current === current) this.render();
+  }
+
   /** Reads the hovered word, or the sentence it's in, aloud. */
   async say(what) {
     const current = this.current;
@@ -374,7 +428,7 @@ export class Hover {
   }
 
   onKey(e) {
-    if (!this.current || this.card?.hidden) return;
+    if (!e.isTrusted || !this.current || this.card?.hidden) return;
     if (e.key === 'Escape') {
       this.hide();
     } else if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditable(e.target)) {

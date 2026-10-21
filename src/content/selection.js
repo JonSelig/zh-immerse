@@ -2,8 +2,8 @@
 // be read aloud, not just dictionary words.
 
 import { isCJK } from '../shared/text.js';
-import { OWN_ATTR } from './translate.js';
 import { speak, canSpeak } from './speech.js';
+import { createOverlay } from './overlay.js';
 
 const MAX_CHARS = 500;
 
@@ -19,7 +19,7 @@ function selectedChinese(selection) {
 export class SelectionSpeaker {
   constructor() {
     this.enabled = false;
-    this.onUp = () => setTimeout(() => this.update(), 0);
+    this.onUp = (e) => { if (e.isTrusted) setTimeout(() => this.update(), 0); };
     this.onChange = () => { if (document.getSelection()?.isCollapsed) this.hide(); };
     this.onScroll = () => this.hide();
   }
@@ -44,10 +44,10 @@ export class SelectionSpeaker {
   }
 
   ensureButton() {
-    if (this.button?.isConnected) return;
+    if (this.overlay?.host.isConnected) return;
+    this.overlay = createOverlay();
     const button = document.createElement('div');
     button.className = 'zhi-say';
-    button.setAttribute(OWN_ATTR, '');
     button.title = 'Read selection aloud';
     button.textContent = '🔊';
     button.hidden = true;
@@ -55,9 +55,9 @@ export class SelectionSpeaker {
     button.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
     button.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (this.text) speak(this.text);
+      if (e.isTrusted && this.text) speak(this.text);
     });
-    document.documentElement.append(button);
+    this.overlay.root.append(button);
     this.button = button;
   }
 

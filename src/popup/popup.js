@@ -1,4 +1,6 @@
 import { loadSettings } from '../shared/settings.js';
+import { sendMessage, sendToTab } from '../shared/messaging.js';
+import { MY_LEVEL } from '../shared/diglot.js';
 
 const $ = (id) => document.getElementById(id);
 const ALL_SITES = { origins: ['<all_urls>'] };
@@ -6,6 +8,7 @@ const ALL_SITES = { origins: ['<all_urls>'] };
 let settings;
 let tab;
 let page = null; // state reported by the tab's content script, if any
+let myCount = 0; // words in My words
 
 /** Small DOM builder: h('b', {}, 'text', child, ...) */
 function h(tag, props = {}, ...children) {
@@ -30,10 +33,10 @@ async function checkStatus() {
     showStatus(['zh-immerse needs access to websites to translate them.', h('br'), grant]);
     return;
   }
-  const host = await browser.runtime.sendMessage({ type: 'hostStatus' });
+  const host = await sendMessage({ type: 'hostStatus' });
   if (host.code === 'hostMissing') {
     showStatus(['The translation helper isn’t installed. In the project folder run ',
-      h('code', {}, 'npm run install:host'), ', then restart Firefox.']);
+      h('code', {}, 'npm run install:host'), ', then restart your browser.']);
   } else if (host.error) {
     showStatus([`Translation helper error: ${host.error}`]);
   } else if (host.status === 'supported') {
@@ -49,7 +52,11 @@ async function checkStatus() {
   }
 }
 
-const levelHint = (level) => (level >= 7 ? 'Translate everything' : level === 1 ? 'Swap HSK 1 words' : `Swap HSK 1–${level} words`);
+function levelHint(level) {
+  if (level === MY_LEVEL) return myCount ? `Swap my ${myCount} word${myCount === 1 ? '' : 's'}` : 'Import or add words first';
+  if (level >= 7) return 'Translate everything';
+  return level === 1 ? 'Swap HSK 1 words' : `Swap HSK 1–${level} words`;
+}
 
 function render() {
   const site = page?.host;
@@ -58,6 +65,7 @@ function render() {
     b.disabled = !settings.enabled;
   }
   $('levelHint').textContent = levelHint(settings.level);
+  $('editMyWords').hidden = settings.level !== MY_LEVEL;
   $('enabled').checked = settings.enabled;
   $('pinyin').checked = settings.pinyin;
   $('site').textContent = site || 'this site';
@@ -74,14 +82,16 @@ async function save(patch) {
 }
 
 async function refreshWords() {
-  const { lookedUp, saved } = await browser.runtime.sendMessage({ type: 'wordStats' });
+  const { lookedUp, saved } = await sendMessage({ type: 'wordStats' });
   if (lookedUp || saved) $('wordStats').textContent = `${lookedUp} word${lookedUp === 1 ? '' : 's'} looked up · ${saved} saved`;
 }
 
 async function init() {
   settings = await loadSettings();
+  const { myWords = [] } = await browser.storage.local.get('myWords');
+  myCount = myWords.length;
   [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  page = await browser.tabs.sendMessage(tab.id, { type: 'pageState' }).catch(() => null);
+  page = await sendToTab(tab.id, { type: 'pageState' }).catch(() => null);
   render();
   checkStatus();
   refreshWords();
@@ -96,11 +106,15 @@ async function init() {
     save({ disabledSites: e.target.checked ? others : [...others, page.host] });
   });
   $('togglePage').addEventListener('click', async () => {
-    page = await browser.tabs.sendMessage(tab.id, { type: 'togglePage' });
+    page = await sendToTab(tab.id, { type: 'togglePage' });
     render();
   });
   $('openVocab').addEventListener('click', () => {
     browser.tabs.create({ url: browser.runtime.getURL('vocab/vocab.html') });
+    window.close();
+  });
+  $('editMyWords').addEventListener('click', () => {
+    browser.tabs.create({ url: browser.runtime.getURL('mywords/mywords.html') });
     window.close();
   });
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, swapAt, ungradedItem } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -63,4 +63,170 @@ test('segmented items keep their shape', () => {
   assert.deepEqual(out.segments, ['I 喜欢 ', 'the 天气', ' today.']);
   assert.equal(out.full, '我喜欢今天的天气。');
   assert.deepEqual(out.ranges.map((r) => r.length), [1, 1, 0]);
+});
+
+test('ranges keep the English each swap replaced, as written on the page', () => {
+  const out = diglotItem(["My friend's ice cream ", 'went'], ['我朋友的冰淇淋', '走了'], map, 3);
+  assert.deepEqual(out.segments, ["My 朋友's 冰淇淋 ", '走']);
+  assert.deepEqual(out.ranges, [[[3, 5, 'friend'], [8, 11, 'ice cream']], [[0, 1, 'went']]]);
+});
+
+test('swapAt finds the swapped word under an offset', () => {
+  const ranges = [[2, 4, 'like'], [5, 7, 'apples']];
+  assert.deepEqual(swapAt(ranges, 3), [2, 4, 'like']);
+  assert.equal(swapAt(ranges, 4), null);
+  assert.equal(swapAt(null, 0), null);
+  assert.equal(replacedAt(ranges, 5), 'apples');
+});
+
+test('replacedAt finds the English behind the character at an offset', () => {
+  const swaps = [[2, 4, 'like'], [5, 7, 'apples']];
+  assert.equal(replacedAt(swaps, 2), 'like');
+  assert.equal(replacedAt(swaps, 3), 'like');
+  assert.equal(replacedAt(swaps, 6), 'apples');
+  assert.equal(replacedAt(swaps, 4), '');
+  assert.equal(replacedAt(swaps, 7), '');
+  assert.equal(replacedAt(null, 0), '');
+});
+
+// Verb + 在/到/给/成 glued by the segmenter (住在 "live in"). `isWord` stands in
+// for CC-CEDICT: real words like 现在 are never split.
+const verbMap = parseWordMap(['live\t住:1', 'sit\t坐:1', 'put\t放:1', 'now\t现在:1', 'just\t正:1'].join('\n'));
+const DICT_WORDS = new Set(['现在', '正在', '中国', '哪里', '桌子', '椅子']);
+const isWord = (s) => DICT_WORDS.has(s);
+const swapWith = (en, zh, level, opts) => applySwaps(en, findSwaps(en, verbMap, level, translationWords(zh, isWord), { isWord, ...opts })).text;
+
+test('a verb glued to 在 by the segmenter still counts as a word', () => {
+  const inTranslation = translationWords('我住在中国。', isWord);
+  assert.ok(inTranslation('住'));
+  assert.ok(!translationWords('我住在中国。')('住')); // without a dictionary, nothing is split
+  assert.ok(!translationWords('他现在很忙。', isWord)('现')); // real words stay whole
+  // Only verb + 在/到/给/成 pairs are split, not any non-word pair.
+  assert.ok(!translationWords('他看书。', isWord)('看')); // 看书 isn't in the test dictionary either
+});
+
+// A word must be confirmed by its own sentence's translation when the
+// English and Chinese have the same number of sentences.
+const stopMap = parseWordMap(['live\t住:1', 'stop\t住:1'].join('\n'));
+const BLOCK_EN = 'I live in China. She ran to the bus stop.';
+const BLOCK_ZH = '我住在中国。她跑到了公交车站。';
+
+test('each sentence is checked against its own translation', () => {
+  const out = diglotItem(BLOCK_EN, BLOCK_ZH, stopMap, 1, { isWord });
+  assert.deepEqual(out.segments, ['I 住在 China. She ran to the bus stop.']);
+  assert.equal(out.full, BLOCK_ZH);
+});
+
+test('sentence matching works across segments', () => {
+  const out = diglotItem(['I live in China. She ', 'ran', ' to the bus stop.'], ['我住在中国。她', '跑到了', '公交车站。'], stopMap, 1, { isWord });
+  assert.deepEqual(out.segments, ['I 住在 China. She ', 'ran', ' to the bus stop.']);
+  assert.deepEqual(out.ranges, [[[2, 4, 'live in']], [], []]);
+});
+
+test('different sentence counts fall back to the whole paragraph', () => {
+  // One Chinese sentence for two English ones: no alignment, so 住 anywhere counts.
+  const out = diglotItem(BLOCK_EN, '我住在中国，她跑到了公交车站住。', stopMap, 1, { isWord });
+  assert.equal(out.segments[0], 'I 住在 China. She ran to the bus 住.');
+});
+
+test('verb + matching preposition becomes one Chinese phrase', () => {
+  assert.equal(swapWith('I live in China.', '我住在中国。', 1), 'I 住在 China.');
+  assert.equal(swapWith('She sat on the chair.', '她坐在椅子上。', 1), 'She 坐在 the chair.');
+});
+
+test('without a matching preposition only the verb is swapped', () => {
+  assert.equal(swapWith('Where do you live?', '你住在哪里？', 1), 'Where do you 住?');
+  assert.equal(swapWith('Put the book on the table.', '把书放在桌子上。', 1), '放 the book on the table.');
+});
+
+test('the phrase needs its preposition to be known at the level', () => {
+  // Level 0 (My words): the map's candidates are level 0; 在 must be on the list.
+  const mine = parseWordMap('live\t住:0');
+  const swap0 = (knownPrep) => applySwaps('I live in China.',
+    findSwaps('I live in China.', mine, 0, translationWords('我住在中国。', isWord), { isWord, knownPrep })).text;
+  assert.equal(swap0(() => false), 'I 住 in China.');
+  assert.equal(swap0((p) => p === '在'), 'I 住在 China.');
+  assert.equal(swapWith('I live in China.', '我住在中国。', 0), 'I live in China.'); // HSK default: nothing at level 0
+});
+
+test('a phrase swap records the English it replaced', () => {
+  const out = diglotItem('I live in China.', '我住在中国。', verbMap, 1, { isWord });
+  assert.deepEqual(out.ranges, [[[2, 4, 'live in']]]);
+});
+
+test('a dictionary verb+preposition word takes its English preposition along', () => {
+  // 来到 is a real word ("come to"); "to" must not be left dangling.
+  const comeMap = parseWordMap('come\t来到:1');
+  const out = diglotItem('He came to China.', '他来到了中国。', comeMap, 1, { isWord: (s) => s === '来到' || s === '中国' });
+  assert.deepEqual(out.segments, ['He 来到 China.']);
+  assert.deepEqual(out.ranges, [[[3, 5, 'came to']]]);
+});
+
+test('sentence matching handles a sentence start at a segment boundary and citations', () => {
+  const split = diglotItem(['I live in China. ', 'She ran to the bus stop.'], ['我住在中国。', '她跑到了公交车站。'], stopMap, 1, { isWord });
+  assert.deepEqual(split.segments, ['I 住在 China. ', 'She ran to the bus stop.']);
+  // A Wikipedia-style citation after the full stop still ends the sentence.
+  const cited = diglotItem('I live in China.[1] She ran to the bus stop.', BLOCK_ZH, stopMap, 1, { isWord });
+  assert.equal(cited.segments[0], 'I 住在 China.[1] She ran to the bus stop.');
+});
+
+const rightMap = parseWordMap([
+  'right\t是:1,对:1,正:1,右:1,右边:1,当:2,不错:2,正确:2,权利:4,权:6',
+  'right side\t右边:1',
+].join('\n'));
+const LOCKER_EN = 'You can find a bank of lockers on your right opposite the Central Ticket Office.';
+const LOCKER_ZH = '在中央售票处对面，您的右边是一排储物柜。';
+const pairs = (swaps) => swaps.map((s) => [s.en, s.zh]);
+
+test('the longest Chinese word for an English word wins (right -> 右边, not 是)', () => {
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, rightMap, 1, translationWords(LOCKER_ZH))), [['right', '右边']]);
+});
+
+test('a longer word above the level keeps the English', () => {
+  const zh = '你的答案是正确的。';
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 1, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 2, translationWords(zh))), [['right', '正确']]);
+});
+
+test('equal lengths keep the list order', () => {
+  const like = parseWordMap(['like\t爱:1,喜欢:1,一样:1', 'apple\t苹果:1'].join('\n'));
+  assert.deepEqual(pairs(findSwaps('I like apples.', like, 1, translationWords('我喜欢一样的苹果。'))),
+    [['like', '喜欢'], ['apples', '苹果']]);
+});
+
+test('at 我的, HSK competitors block a shorter word from the list', () => {
+  const mine = new Map([['right', [{ zh: '是', level: 0 }]]]);
+  const inZh = translationWords(LOCKER_ZH);
+  // The list alone would pick 是; the sentence uses the more specific 右边.
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh)), [['right', '是']]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh, { competitors: rightMap })), []);
+});
+
+test('at 我的, a competitor that is also on the list is known', () => {
+  const mine = new Map([['right', [{ zh: '右边', level: 0 }, { zh: '是', level: 0 }]]]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, translationWords(LOCKER_ZH), { competitors: rightMap })),
+    [['right', '右边']]);
+});
+
+test('a blocked phrase keeps its first word English', () => {
+  const map2 = parseWordMap(['bus stop\t公交车站:3', 'bus\t公交车:2', 'stop\t站:1'].join('\n'));
+  const zh = '他在公交车站等。';
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 2, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 3, translationWords(zh))), [['bus stop', '公交车站']]);
+});
+
+test('a blocked phrase only keeps its first word English', () => {
+  const m = parseWordMap(['last month\t上个月:4', 'last week\t上周:2', 'last\t去:1,最后:1', 'month\t月:1,月份:2', 'week\t周:1,星期:1'].join('\n'));
+  const month = '新学校上个月开业了。';
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 1, translationWords(month))), [['month', '月']]);
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 4, translationWords(month))), [['last month', '上个月']]);
+  const week = '上周我去看望了我的祖母。';
+  // "Last" must not become 去 (from 我去 "I went"), even though "last week" is above the level.
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 1, translationWords(week))), []);
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 2, translationWords(week))), [['Last week', '上周']]);
+});
+
+test('ungradedItem leaves the English as it is', () => {
+  assert.deepEqual(ungradedItem('Hello there.'), { segments: ['Hello there.'], ranges: [[]], full: null });
+  assert.deepEqual(ungradedItem(['Read the ', 'docs', '.']), { segments: ['Read the ', 'docs', '.'], ranges: [[], [], []], full: null });
 });

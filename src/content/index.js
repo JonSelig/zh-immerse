@@ -4,18 +4,21 @@ import { PageTranslator } from './translate.js';
 import { Hover } from './hover.js';
 import { SelectionSpeaker } from './selection.js';
 import { DEFAULT_SETTINGS, loadSettings } from '../shared/settings.js';
-
-const send = (msg) => browser.runtime.sendMessage(msg);
+import { MY_LEVEL } from '../shared/diglot.js';
+import { onMessage, sendMessage as send } from '../shared/messaging.js';
 
 let settings = { ...DEFAULT_SETTINGS };
 let pageOff = false; // per-tab "show English" toggle (Alt+Shift+Z)
 let lastError = null;
 
 const translator = new PageTranslator({
-  async translate(items, level) {
-    const reply = await send({ type: 'translate', items, level });
+  async translate(items, level, urgent) {
+    const reply = await send({ type: 'translate', items, level, urgent });
     if (reply?.error) throw Object.assign(new Error(reply.error), { code: reply.code });
     return reply.graded ?? reply.translations;
+  },
+  prioritize(items) {
+    send({ type: 'prioritize', items }).catch(() => {});
   },
   onError(err) {
     lastError = { message: err.message, code: err.code };
@@ -51,24 +54,27 @@ browser.storage.onChanged.addListener((changes, area) => {
   for (const [key, { newValue }] of Object.entries(changes)) {
     if (key in DEFAULT_SETTINGS) settings[key] = newValue ?? DEFAULT_SETTINGS[key];
   }
+  // At 我的, redo the page when the word list changes (e.g. the first words
+  // are added). Translations are cached, so this is quick.
+  if ('myWords' in changes && settings.level === MY_LEVEL) translator.stop();
   apply();
 });
 
-browser.runtime.onMessage.addListener((msg) => {
+onMessage((msg) => {
   if (msg?.type === 'togglePage') {
     pageOff = !pageOff;
     lastError = null;
     apply();
   }
   if (msg?.type === 'togglePage' || msg?.type === 'pageState') {
-    return Promise.resolve({
+    return {
       pageOff,
       active: translator.active,
       translated: translator.translatedCount,
       blocked: translator.blocked,
       error: lastError,
       host: location.hostname,
-    });
+    };
   }
   return undefined;
 });
