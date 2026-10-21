@@ -1,7 +1,7 @@
 // Background script: routes messages from content scripts, the popup and the
 // vocab page to the translator, dictionary and word store.
 
-import { translateItems, clearCache } from './translator.js';
+import { translateItems, prioritize, clearCache } from './translator.js';
 import { gradeItems } from './graded.js';
 import { FULL_LEVEL } from '../shared/diglot.js';
 import { hostStatus } from './native.js';
@@ -32,14 +32,20 @@ function siteOf(sender) {
 const EXTENSION_BASE = browser.runtime.getURL('');
 
 const handlers = {
-  async translate({ items, level = FULL_LEVEL }, sender) {
+  async translate({ items, level = FULL_LEVEL, urgent = true }, sender) {
     try {
-      const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender) });
+      const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender), urgent: urgent !== false });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };
     } catch (err) {
       return { error: err.message, code: err.code ?? 'internal' };
     }
+  },
+
+  // Text the page asked for ahead of scrolling is now on screen.
+  prioritize({ items }, sender) {
+    prioritize(items, { site: siteOf(sender) });
+    return null;
   },
 
   async lookup({ text }) {

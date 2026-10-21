@@ -11,7 +11,9 @@
 //   as an array of segments; the host returns the Chinese split back into the
 //   same segments, so each link keeps its own (translated) text.
 // - Units are translated when they come near the viewport, and a
-//   MutationObserver picks up content that appears or changes later.
+//   MutationObserver picks up content that appears or changes later. Units
+//   on screen are sent as urgent; a unit sent ahead of scrolling that comes
+//   on screen while still waiting is moved up (prioritize).
 
 import { looksEnglish, collapseSpace } from '../shared/text.js';
 import { makeRuby, RUBY_CLASS } from './ruby.js';
@@ -39,6 +41,11 @@ function skipElement(el) {
     || el.isContentEditable;
 }
 
+/** True if a rect (from getBoundingClientRect) is at least partly in the viewport. */
+function onScreen(rect) {
+  return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+}
+
 function insideSkipped(node) {
   for (let el = isElement(node) ? node : node.parentElement; el; el = el.parentElement) {
     if (skipElement(el)) return true;
@@ -49,13 +56,17 @@ function insideSkipped(node) {
 export class PageTranslator {
   /**
    * @param {object} opts
-   * @param {(items: Array<string|string[]>, level: number) => Promise<Array<string|string[]|object|null>>} opts.translate
+   * @param {(items: Array<string|string[]>, level: number, urgent: boolean) => Promise<Array<string|string[]|object|null>>} opts.translate
    *   Resolves with one result per item: the full translation (level 7), or at
    *   levels 0–6 { segments, ranges, full } with only HSK (or My words) words swapped in.
+   *   urgent: the unit is on screen (not just near it).
+   * @param {(items: Array<string|string[]>) => void} [opts.prioritize]
+   *   Asks for items already sent (not urgent) to go first: they're on screen now.
    * @param {(err: Error) => void} [opts.onError]
    */
-  constructor({ translate, onError = () => {} }) {
+  constructor({ translate, prioritize = () => {}, onError = () => {} }) {
     this.translateFn = translate;
+    this.prioritizeFn = prioritize;
     this.onError = onError;
     this.active = false;
     this.pinyin = false;
@@ -82,6 +93,7 @@ export class PageTranslator {
     this.active = true;
     this.blocked = null;
     this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: ROOT_MARGIN });
+    this.seen = new IntersectionObserver((entries) => this.onSeen(entries));
     this.mo = new MutationObserver((records) => this.onMutations(records));
     this.mo.observe(document.body, { subtree: true, childList: true, characterData: true });
     this.queueScan(document.body);
@@ -91,6 +103,7 @@ export class PageTranslator {
     if (!this.active) return;
     this.active = false;
     this.io.disconnect();
+    this.seen.disconnect();
     this.mo.disconnect();
     clearTimeout(this.scanTimer);
     for (const seg of this.allSegs) {
@@ -206,7 +219,17 @@ export class PageTranslator {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       this.io.unobserve(entry.target);
-      this.translateUnit(entry.target);
+      this.translateUnit(entry.target, onScreen(entry.boundingClientRect));
+    }
+  }
+
+  /** A unit sent ahead of scrolling came on screen. */
+  onSeen(entries) {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      this.seen.unobserve(entry.target);
+      const state = this.units.get(entry.target);
+      if (state?.status === 'pending') this.prioritizeFn(state.items);
     }
   }
 
@@ -248,7 +271,7 @@ export class PageTranslator {
     return groups.filter((g) => g.length && looksEnglish(g.map((s) => s.en).join('')));
   }
 
-  async translateUnit(unit) {
+  async translateUnit(unit, urgent = onScreen(unit.getBoundingClientRect())) {
     const state = this.units.get(unit);
     if (!this.active || !state || this.blocked || !unit.isConnected) return;
     const groups = this.collect(unit);
@@ -264,16 +287,21 @@ export class PageTranslator {
       return texts.length === 1 ? texts[0] : texts;
     });
 
+    state.items = items;
+    if (!urgent) this.seen.observe(unit);
+
     let results;
     try {
-      results = await this.translateFn(items, this.level);
+      results = await this.translateFn(items, this.level, urgent);
     } catch (err) {
+      this.seen.unobserve(unit);
       state.status = 'observed';
       if (['hostMissing', 'notInstalled', 'unsupported'].includes(err.code)) this.blocked = err.code;
       this.onError(err);
       return;
     }
     if (!this.active || state.seq !== seq) return;
+    this.seen.unobserve(unit);
 
     const fulls = [];
     this.withoutObserver(() => {

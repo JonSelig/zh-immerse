@@ -11,10 +11,13 @@ let pageOff = false; // per-tab "show English" toggle (Alt+Shift+Z)
 let lastError = null;
 
 const translator = new PageTranslator({
-  async translate(items, level) {
-    const reply = await send({ type: 'translate', items, level });
+  async translate(items, level, urgent) {
+    const reply = await send({ type: 'translate', items, level, urgent });
     if (reply?.error) throw Object.assign(new Error(reply.error), { code: reply.code });
     return reply.graded ?? reply.translations;
+  },
+  prioritize(items) {
+    send({ type: 'prioritize', items }).catch(() => {});
   },
   onError(err) {
     lastError = { message: err.message, code: err.code };

@@ -37,3 +37,10 @@ test('setMyWords is page-only and size-checked', () => {
   assert.match(refusal({ type: 'setMyWords', words: 'all' }, page, BASE), /word list/);
   assert.match(refusal({ type: 'setMyWords', words: new Array(20_001).fill({}) }, page, BASE), /word list/);
 });
+
+test('prioritize is allowed from pages and size-checked like translate', () => {
+  assert.equal(refusal({ type: 'prioritize', items: ['Hello', ['Read the ', 'docs']] }, content, BASE), null);
+  assert.match(refusal({ type: 'prioritize', items: 'Hello' }, content, BASE), /items/);
+  assert.match(refusal({ type: 'prioritize', items: new Array(5000).fill('a') }, content, BASE), /items/);
+  assert.match(refusal({ type: 'prioritize', items: ['a'.repeat(2_000_000)] }, content, BASE), /text/);
+});
