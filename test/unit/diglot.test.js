@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, ungradedItem } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, swapAt, ungradedItem } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -69,6 +69,14 @@ test('ranges keep the English each swap replaced, as written on the page', () =>
   const out = diglotItem(["My friend's ice cream ", 'went'], ['我朋友的冰淇淋', '走了'], map, 3);
   assert.deepEqual(out.segments, ["My 朋友's 冰淇淋 ", '走']);
   assert.deepEqual(out.ranges, [[[3, 5, 'friend'], [8, 11, 'ice cream']], [[0, 1, 'went']]]);
+});
+
+test('swapAt finds the swapped word under an offset', () => {
+  const ranges = [[2, 4, 'like'], [5, 7, 'apples']];
+  assert.deepEqual(swapAt(ranges, 3), [2, 4, 'like']);
+  assert.equal(swapAt(ranges, 4), null);
+  assert.equal(swapAt(null, 0), null);
+  assert.equal(replacedAt(ranges, 5), 'apples');
 });
 
 test('replacedAt finds the English behind the character at an offset', () => {
@@ -160,6 +168,62 @@ test('sentence matching handles a sentence start at a segment boundary and citat
   // A Wikipedia-style citation after the full stop still ends the sentence.
   const cited = diglotItem('I live in China.[1] She ran to the bus stop.', BLOCK_ZH, stopMap, 1, { isWord });
   assert.equal(cited.segments[0], 'I 住在 China.[1] She ran to the bus stop.');
+});
+
+const rightMap = parseWordMap([
+  'right\t是:1,对:1,正:1,右:1,右边:1,当:2,不错:2,正确:2,权利:4,权:6',
+  'right side\t右边:1',
+].join('\n'));
+const LOCKER_EN = 'You can find a bank of lockers on your right opposite the Central Ticket Office.';
+const LOCKER_ZH = '在中央售票处对面，您的右边是一排储物柜。';
+const pairs = (swaps) => swaps.map((s) => [s.en, s.zh]);
+
+test('the longest Chinese word for an English word wins (right -> 右边, not 是)', () => {
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, rightMap, 1, translationWords(LOCKER_ZH))), [['right', '右边']]);
+});
+
+test('a longer word above the level keeps the English', () => {
+  const zh = '你的答案是正确的。';
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 1, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 2, translationWords(zh))), [['right', '正确']]);
+});
+
+test('equal lengths keep the list order', () => {
+  const like = parseWordMap(['like\t爱:1,喜欢:1,一样:1', 'apple\t苹果:1'].join('\n'));
+  assert.deepEqual(pairs(findSwaps('I like apples.', like, 1, translationWords('我喜欢一样的苹果。'))),
+    [['like', '喜欢'], ['apples', '苹果']]);
+});
+
+test('at 我的, HSK competitors block a shorter word from the list', () => {
+  const mine = new Map([['right', [{ zh: '是', level: 0 }]]]);
+  const inZh = translationWords(LOCKER_ZH);
+  // The list alone would pick 是; the sentence uses the more specific 右边.
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh)), [['right', '是']]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh, { competitors: rightMap })), []);
+});
+
+test('at 我的, a competitor that is also on the list is known', () => {
+  const mine = new Map([['right', [{ zh: '右边', level: 0 }, { zh: '是', level: 0 }]]]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, translationWords(LOCKER_ZH), { competitors: rightMap })),
+    [['right', '右边']]);
+});
+
+test('a blocked phrase keeps its first word English', () => {
+  const map2 = parseWordMap(['bus stop\t公交车站:3', 'bus\t公交车:2', 'stop\t站:1'].join('\n'));
+  const zh = '他在公交车站等。';
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 2, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 3, translationWords(zh))), [['bus stop', '公交车站']]);
+});
+
+test('a blocked phrase only keeps its first word English', () => {
+  const m = parseWordMap(['last month\t上个月:4', 'last week\t上周:2', 'last\t去:1,最后:1', 'month\t月:1,月份:2', 'week\t周:1,星期:1'].join('\n'));
+  const month = '新学校上个月开业了。';
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 1, translationWords(month))), [['month', '月']]);
+  assert.deepEqual(pairs(findSwaps('The school opened last month.', m, 4, translationWords(month))), [['last month', '上个月']]);
+  const week = '上周我去看望了我的祖母。';
+  // "Last" must not become 去 (from 我去 "I went"), even though "last week" is above the level.
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 1, translationWords(week))), []);
+  assert.deepEqual(pairs(findSwaps('Last week I visited my grandmother.', m, 2, translationWords(week))), [['Last week', '上周']]);
 });
 
 test('ungradedItem leaves the English as it is', () => {

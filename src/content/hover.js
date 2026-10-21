@@ -5,7 +5,7 @@
 import { isCJK, sentenceAround } from '../shared/text.js';
 import { syllables } from '../shared/pinyin.js';
 import { MAX_LOOKUP } from '../shared/dict.js';
-import { replacedAt } from '../shared/diglot.js';
+import { swapAt } from '../shared/diglot.js';
 import { speak, canSpeak } from './speech.js';
 import { createOverlay } from './overlay.js';
 
@@ -164,6 +164,7 @@ export class Hover {
     let offset = hit.offset;
     let en = '';
     let replaced = '';
+    let swapZh = '';
     if (info) {
       const { seg, state } = info;
       const inSeg = nodes.slice(0, index).reduce((n, t) => n + t.data.length, 0) + hit.offset;
@@ -172,13 +173,18 @@ export class Hover {
       zh = state?.zh || seg.zh;
       offset = (segIndex > 0 ? before.slice(0, segIndex).reduce((n, s) => n + s.zh.length, 0) : 0) + inSeg;
       en = state?.en || seg.en;
-      // At graded levels: the English word this Chinese word was swapped in for.
-      replaced = replacedAt(seg.swaps, inSeg);
+      // At graded levels: the English word this Chinese word was swapped in
+      // for, and the Chinese shown (for ⚑ Report).
+      const swap = swapAt(seg.swaps, inSeg);
+      if (swap) {
+        replaced = swap[2];
+        swapZh = seg.zh.slice(swap[0], swap[1]);
+      }
     }
     // At graded levels the page shows mixed English/Chinese; the example
     // sentence (saved with lookups and read aloud) is the full Chinese.
     const full = info?.state?.full ?? null;
-    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full, replaced };
+    return { text, positions, rect: hit.rect, sentence: sentenceAround(zh, offset), en, full, replaced, swapZh };
   }
 
   async lookup(text) {
@@ -235,6 +241,7 @@ export class Hover {
     this.card.addEventListener('click', (e) => {
       if (!e.isTrusted) return;
       if (e.target.closest('.zhi-pop-save')) this.toggleSave();
+      else if (e.target.closest('.zhi-pop-report')) this.report();
       else if (e.target.closest('.zhi-pop-say-word')) this.say('word');
       else if (e.target.closest('.zhi-pop-say-sentence')) this.say('sentence');
     });
@@ -297,6 +304,12 @@ export class Hover {
     const save = el('span', 'zhi-pop-save', state.saved ? '★ Saved ' : '☆ Save ');
     save.append(el('span', 'zhi-pop-key', 'S'));
     actions.append(save);
+    if (this.current.replaced) {
+      const done = this.current.reported;
+      const report = el('span', done ? 'zhi-pop-reported' : 'zhi-pop-report', done ?? '⚑ Report');
+      if (!done) report.title = 'Report this as a wrong swap';
+      actions.append(report);
+    }
     foot.append(actions, el('span', 'zhi-pop-count', state.count ? `looked up ${state.count}×` : 'new word'));
     card.append(foot);
     card.hidden = false;
@@ -376,6 +389,29 @@ export class Hover {
     const saved = !this.wordState.get(word)?.saved;
     const result = await this.send({ type: 'setSaved', saved, ...this.wordInfo(current) });
     this.wordState.set(word, result);
+    if (this.current === current) this.render();
+  }
+
+  /** Saves this swap as wrong, for later study (word list → Reported swaps). */
+  async report() {
+    const current = this.current;
+    if (!current?.replaced || current.reported) return;
+    let label;
+    try {
+      const { stored } = await this.send({
+        type: 'reportSwap',
+        swapEn: current.replaced,
+        swapZh: current.swapZh,
+        en: (current.en ?? '').slice(0, 2000),
+        zh: (current.full ?? '').slice(0, 2000),
+        level: this.translator.level,
+        url: location.href,
+      });
+      label = stored ? 'Reported ✓' : 'Not saved in private windows';
+    } catch {
+      label = 'Couldn\'t report';
+    }
+    current.reported = label;
     if (this.current === current) this.render();
   }
 

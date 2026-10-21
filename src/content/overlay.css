@@ -83,6 +83,9 @@
 }
 .zhi-pop .zhi-pop-save { cursor: pointer; color: var(--fg); }
 .zhi-pop .zhi-pop-save:hover { text-decoration: underline; }
+.zhi-pop .zhi-pop-report { cursor: pointer; color: var(--muted); }
+.zhi-pop .zhi-pop-report:hover { color: var(--fg); text-decoration: underline; }
+.zhi-pop .zhi-pop-reported { color: var(--muted); }
 .zhi-pop .zhi-pop-key {
   display: inline-block;
   min-width: 16px;

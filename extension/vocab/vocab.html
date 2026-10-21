@@ -17,9 +17,10 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="lookups" aria-selected="true">Looked up <span id="countLookups" class="pill">0</span></button>
       <button role="tab" data-tab="saved" aria-selected="false">Saved <span id="countSaved" class="pill">0</span></button>
+      <button role="tab" data-tab="reports" aria-selected="false">Reported swaps <span id="countReports" class="pill">0</span></button>
     </nav>
 
-    <section class="toolbar">
+    <section id="wordBar" class="toolbar">
       <input id="query" type="search" placeholder="Search word, pinyin or meaning" aria-label="Search">
       <label>Sort
         <select id="sort">
@@ -50,9 +51,16 @@
         </div>
       </details>
     </section>
+    <section id="reportBar" class="toolbar" hidden>
+      <span class="muted">Swaps you flagged with ⚑ Report in the popup.</span>
+      <span class="spacer"></span>
+      <button id="exportReports" class="primary">Export reports (JSON)</button>
+      <button id="clearReports">Clear all…</button>
+    </section>
 
     <p id="exportNote" class="muted note"></p>
 
+    <div id="wordTable">
     <table>
       <thead>
         <tr>
@@ -67,6 +75,8 @@
       </thead>
       <tbody id="rows"></tbody>
     </table>
+    </div>
+    <div id="reports" hidden></div>
     <p id="empty" class="empty" hidden></p>
   </main>
   <script src="../dist/vocab.js"></script>

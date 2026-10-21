@@ -38,6 +38,22 @@ test('setMyWords is page-only and size-checked', () => {
   assert.match(refusal({ type: 'setMyWords', words: new Array(20_001).fill({}) }, page, BASE), /word list/);
 });
 
+test('reportSwap is allowed from pages but type- and size-checked', () => {
+  const ok = { type: 'reportSwap', swapEn: 'right', swapZh: '是', en: 'On your right.', zh: '在右边。', level: 1, url: 'https://a.example/' };
+  assert.equal(refusal(ok, content, BASE), null);
+  assert.match(refusal({ ...ok, swapEn: 5 }, content, BASE), /report/);
+  assert.match(refusal({ ...ok, en: 'x'.repeat(20_001) }, content, BASE), /report/);
+  assert.match(refusal({ ...ok, level: 8 }, content, BASE), /report/);
+  assert.match(refusal({ ...ok, level: '1' }, content, BASE), /report/);
+});
+
+test('swap report list, delete and clear are page-only', () => {
+  for (const type of ['listSwapReports', 'deleteSwapReport', 'clearSwapReports']) {
+    assert.ok(PAGE_ONLY.has(type), type);
+    assert.match(refusal({ type }, content, BASE), /extension pages/, type);
+  }
+});
+
 test('dictEntries is page-only and size-checked', () => {
   assert.ok(PAGE_ONLY.has('dictEntries'));
   assert.match(refusal({ type: 'dictEntries', words: ['中'] }, content, BASE), /extension pages/);
