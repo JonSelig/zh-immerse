@@ -34,6 +34,8 @@ After a rebuild, reload the extension (and the tabs you test in).
       a word updates an open page without a reload.
 - [ ] **My words, two tabs:** a word added in one My words tab appears in
       another.
+- [ ] **Report a swap:** at a graded level, hover a swapped word → ⚑ Report;
+      it appears under *Word list → Reported swaps* and exports as JSON.
 - [ ] **Icons:** the toolbar icon (16/32 px) looks crisp in light and dark
       toolbars.
 - [ ] **Not installed:** with the helper unregistered, the popup says
