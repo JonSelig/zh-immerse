@@ -242,3 +242,9 @@ export function diglotItem(item, translation, map, level, options = {}) {
 export function replacedAt(ranges, offset) {
   return ranges?.find(([start, end]) => offset >= start && offset < end)?.[2] ?? '';
 }
+
+/** A graded result with nothing swapped (the item's English as it is). */
+export function ungradedItem(item) {
+  const segments = Array.isArray(item) ? item : [item];
+  return { segments, ranges: segments.map(() => []), full: null };
+}

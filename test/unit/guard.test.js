@@ -8,7 +8,7 @@ const content = { url: 'https://example.com/article', tab: { id: 2 } };
 
 test('history and cache handlers only answer extension pages', () => {
   for (const type of PAGE_ONLY) {
-    const msg = type === 'setMyWords' ? { type, words: [] } : { type };
+    const msg = type === 'setMyWords' || type === 'dictEntries' ? { type, words: [] } : { type };
     assert.equal(refusal(msg, page, BASE), null, type);
     assert.match(refusal({ type }, content, BASE), /extension pages/, type);
     assert.match(refusal({ type }, {}, BASE), /extension pages/, type);
@@ -36,4 +36,14 @@ test('setMyWords is page-only and size-checked', () => {
   assert.equal(refusal({ type: 'setMyWords', words: [{ zh: '中' }] }, page, BASE), null);
   assert.match(refusal({ type: 'setMyWords', words: 'all' }, page, BASE), /word list/);
   assert.match(refusal({ type: 'setMyWords', words: new Array(20_001).fill({}) }, page, BASE), /word list/);
+});
+
+test('dictEntries is page-only and size-checked', () => {
+  assert.ok(PAGE_ONLY.has('dictEntries'));
+  assert.match(refusal({ type: 'dictEntries', words: ['中'] }, content, BASE), /extension pages/);
+  assert.equal(refusal({ type: 'dictEntries', words: ['中', '中国人'] }, page, BASE), null);
+  assert.match(refusal({ type: 'dictEntries', words: '中' }, page, BASE), /word list/);
+  assert.match(refusal({ type: 'dictEntries', words: [5] }, page, BASE), /word list/);
+  assert.match(refusal({ type: 'dictEntries', words: ['中'.repeat(40)] }, page, BASE), /word list/);
+  assert.match(refusal({ type: 'dictEntries', words: new Array(20_001).fill('中') }, page, BASE), /word list/);
 });

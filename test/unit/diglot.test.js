@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt } from '../../src/shared/diglot.js';
+import { lemmas, findSwaps, applySwaps, diglotItem, parseWordMap, translationWords, replacedAt, ungradedItem } from '../../src/shared/diglot.js';
 
 const map = parseWordMap([
   'like\t爱:1,喜欢:1,一样:1',
@@ -160,4 +160,9 @@ test('sentence matching handles a sentence start at a segment boundary and citat
   // A Wikipedia-style citation after the full stop still ends the sentence.
   const cited = diglotItem('I live in China.[1] She ran to the bus stop.', BLOCK_ZH, stopMap, 1, { isWord });
   assert.equal(cited.segments[0], 'I 住在 China.[1] She ran to the bus stop.');
+});
+
+test('ungradedItem leaves the English as it is', () => {
+  assert.deepEqual(ungradedItem('Hello there.'), { segments: ['Hello there.'], ranges: [[]], full: null });
+  assert.deepEqual(ungradedItem(['Read the ', 'docs', '.']), { segments: ['Read the ', 'docs', '.'], ranges: [[], [], []], full: null });
 });

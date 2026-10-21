@@ -4,6 +4,7 @@ import { PageTranslator } from './translate.js';
 import { Hover } from './hover.js';
 import { SelectionSpeaker } from './selection.js';
 import { DEFAULT_SETTINGS, loadSettings } from '../shared/settings.js';
+import { MY_LEVEL } from '../shared/diglot.js';
 import { onMessage, sendMessage as send } from '../shared/messaging.js';
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -50,6 +51,9 @@ browser.storage.onChanged.addListener((changes, area) => {
   for (const [key, { newValue }] of Object.entries(changes)) {
     if (key in DEFAULT_SETTINGS) settings[key] = newValue ?? DEFAULT_SETTINGS[key];
   }
+  // At 我的, redo the page when the word list changes (e.g. the first words
+  // are added). Translations are cached, so this is quick.
+  if ('myWords' in changes && settings.level === MY_LEVEL) translator.stop();
   apply();
 });
 

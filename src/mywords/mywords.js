@@ -7,9 +7,12 @@ import { syllables } from '../shared/pinyin.js';
 import { sendMessage as send } from '../shared/messaging.js';
 
 const $ = (id) => document.getElementById(id);
+const MAX_ROWS = 500; // rows drawn at once; search narrows the rest
+const LOOKUP_BATCH = 2000; // words per dictEntries message
 
 let words = [];
 let autoEn = ''; // English text the page filled in via #addZh lookup
+let searchTimer = null;
 const dict = new Map(); // zh -> CC-CEDICT entries [{ pinyin, defs }] ([] if not found)
 
 function h(tag, props = {}, ...children) {
@@ -27,13 +30,23 @@ function pinyinNode(numbered) {
   return span;
 }
 
-async function entries(zh) {
-  if (!dict.has(zh)) {
-    const match = await send({ type: 'lookup', text: zh }).catch(() => null);
-    dict.set(zh, match?.word === zh ? match.entries : []);
+/** Fetches CC-CEDICT entries for the words not looked up yet, in batches. */
+async function fetchEntries(list) {
+  const missing = [...new Set(list)].filter((zh) => !dict.has(zh) && zh.length <= 16);
+  for (let i = 0; i < missing.length; i += LOOKUP_BATCH) {
+    const batch = missing.slice(i, i + LOOKUP_BATCH);
+    const found = await send({ type: 'dictEntries', words: batch }).catch(() => null);
+    if (!found) continue; // try again on the next load instead of caching "no entries"
+    for (const zh of batch) dict.set(zh, found[zh] ?? []);
   }
-  return dict.get(zh);
 }
+
+async function entries(zh) {
+  await fetchEntries([zh]);
+  return dict.get(zh) ?? [];
+}
+
+const editing = () => !!document.querySelector('#rows input');
 
 /** Lowercase text without tone marks, for search. */
 const fold = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -78,7 +91,7 @@ function editCell(td, w) {
   });
   input.addEventListener('blur', () => {
     if (!cancelled && input.value.trim() !== w.en) save(editWord(words, w.zh, input.value));
-    else td.textContent = w.en || '—';
+    else render(); // also picks up changes another tab made while editing
   });
   td.replaceChildren(input);
   input.focus();
@@ -101,9 +114,11 @@ function row(w) {
 function render() {
   const query = fold($('query').value.trim());
   const list = query ? words.filter((w) => haystack(w).includes(query)) : words;
-  $('rows').replaceChildren(...list.map(row));
-  const total = `${words.length} word${words.length === 1 ? '' : 's'}`;
-  $('count').textContent = list.length === words.length ? total : `${list.length} of ${total}`;
+  $('rows').replaceChildren(...list.slice(0, MAX_ROWS).map(row));
+  const total = `${words.length.toLocaleString('en-US')} word${words.length === 1 ? '' : 's'}`;
+  let count = list.length === words.length ? total : `${list.length.toLocaleString('en-US')} of ${total}`;
+  if (list.length > MAX_ROWS) count += ` · showing the first ${MAX_ROWS}, search to narrow`;
+  $('count').textContent = count;
   $('removeAll').disabled = !words.length;
   const empty = $('empty');
   empty.hidden = list.length > 0;
@@ -112,9 +127,9 @@ function render() {
 
 async function load() {
   ({ myWords: words = [] } = await browser.storage.local.get('myWords'));
-  render();
-  await Promise.all(words.map((w) => entries(w.zh))); // pinyin and search
-  render();
+  if (!editing()) render();
+  await fetchEntries(words.map((w) => w.zh)); // pinyin and search
+  if (!editing()) render();
 }
 
 $('importApkg').addEventListener('change', async (e) => {
@@ -207,7 +222,22 @@ $('removeAll').addEventListener('click', async () => {
   await save([]);
 });
 
-$('query').addEventListener('input', render);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('#rows input')) load(); });
+$('query').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 150);
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !editing()) load(); });
+
+// Another My words tab (or window) changed the list: follow it, so a save
+// here starts from the latest list (this narrows, but can't fully close, the
+// window in which two tabs saving at once lose one change).
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !('myWords' in changes)) return;
+  const next = changes.myWords.newValue ?? [];
+  if (JSON.stringify(next) === JSON.stringify(words)) return; // our own save
+  words = next;
+  if (!editing()) render();
+  fetchEntries(words.map((w) => w.zh)).then(() => { if (!editing()) render(); });
+});
 
 load();
