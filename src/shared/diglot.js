@@ -77,6 +77,15 @@ export function lemmas(word) {
   return out;
 }
 
+// Verb + 在/到/给/成 written as one unit (住在 "live in", 跑到 "run to"),
+// with the English prepositions each can stand for and its HSK level.
+export const VERB_PREPS = {
+  在: { en: ['in', 'at', 'on'], level: 1 },
+  到: { en: ['to'], level: 1 },
+  给: { en: ['to', 'for'], level: 1 },
+  成: { en: ['into'], level: 2 },
+};
+
 const PARTICLES = '了过着的得地';
 const PRONOUNS = '我你他她它';
 
@@ -84,9 +93,10 @@ const PRONOUNS = '我你他她它';
  * Builds a membership test for Chinese words in a translated sentence. Uses
  * word segmentation, so a single-character word like 学 doesn't match inside
  * 大学; longer words also match as plain substrings, in case the segmenter
- * splits them differently.
+ * splits them differently. With `isWord` (a dictionary check), a verb glued
+ * to 在/到/给/成 that isn't itself a word (住在, 跑到) also counts as the verb.
  */
-export function translationWords(full) {
+export function translationWords(full, isWord = null) {
   const words = new Set();
   if (typeof Intl.Segmenter === 'function') {
     for (const { segment, isWordLike } of new Intl.Segmenter('zh', { granularity: 'word' }).segment(full)) {
@@ -97,6 +107,7 @@ export function translationWords(full) {
       if (segment.length === 2) {
         if (PARTICLES.includes(segment[1])) words.add(segment[0]);
         if (PRONOUNS.includes(segment[0])) words.add(segment[1]);
+        if (isWord && VERB_PREPS[segment[1]] && !isWord(segment)) words.add(segment[0]);
       }
     }
   }
@@ -108,8 +119,14 @@ const TOKEN = /[A-Za-z]+(?:['’][A-Za-z]+)*/g;
 /**
  * Finds English words/phrases in `text` to swap at `level`.
  * -> [{ start, end, zh, en }] in text order, non-overlapping.
+ * Options: `isWord` (dictionary check) enables verb + preposition phrases
+ * (live in -> 住在) when the translation has them as a non-word segment;
+ * `knownPrep(p)` says whether 在/到/给/成 may be shown (default: by HSK level).
  */
-export function findSwaps(text, map, level, inTranslation) {
+export function findSwaps(text, map, level, inTranslation, {
+  isWord = null,
+  knownPrep = (p) => VERB_PREPS[p].level <= level,
+} = {}) {
   const tokens = [...text.matchAll(TOKEN)].map((m) => {
     let word = m[0];
     if (/['’]s$/i.test(word)) word = word.slice(0, -2); // friend's -> friend
@@ -131,8 +148,24 @@ export function findSwaps(text, map, level, inTranslation) {
       }
       if (!entry) continue;
       const start = span[0].start;
-      const end = span.at(-1).end;
-      swaps.push({ start, end, zh: entry.zh, en: text.slice(start, end) });
+      let end = span.at(-1).end;
+      let { zh } = entry;
+      const next = tokens[i + n];
+      if (next && text.slice(end, next.start) === ' ') {
+        const nextWord = next.word.toLowerCase();
+        const fits = (p) => VERB_PREPS[p].en.includes(nextWord);
+        // A word that already ends in its preposition (来到 "come to") takes
+        // the English one along instead of leaving it dangling.
+        const own = zh.length > 1 && VERB_PREPS[zh.at(-1)] && fits(zh.at(-1));
+        const prep = !own && isWord && Object.keys(VERB_PREPS).find((p) => fits(p)
+          && knownPrep(p) && !isWord(zh + p) && inTranslation(zh + p));
+        if (own || prep) {
+          if (prep) zh += prep;
+          end = next.end;
+          n += 1;
+        }
+      }
+      swaps.push({ start, end, zh, en: text.slice(start, end) });
       i += n - 1;
       break;
     }
@@ -157,20 +190,50 @@ export function applySwaps(text, swaps) {
   return { text: out + text.slice(cursor), ranges };
 }
 
+// Sentence ends: English . ! ? followed by whitespace; Chinese 。！？ (and
+// closing quotes or brackets after them).
+const EN_SENTENCE_END = /[.!?]+["'”’)\]]*(?:\[\d+\])*\s+/g; // also "China.[1] She"
+const ZH_SENTENCE = /[^。！？!?]+(?:[。！？!?]+["'”’」』）)]*|$)/g;
+
+/** Start offsets of the sentences in `text`. */
+function sentenceStarts(text) {
+  return [0, ...[...text.matchAll(EN_SENTENCE_END)].map((m) => m.index + m[0].length).filter((i) => i < text.length)];
+}
+
 /**
  * Graded version of one translation item. `item` is the English (a string or
  * an array of segments), `translation` its full Chinese translation in the
  * same shape. -> { segments: [mixed text], ranges: [[[s, e, en], ...]], full }
+ *
+ * When the English and the Chinese have the same number of sentences, a word
+ * is checked only against its own sentence's Chinese, so a word with several
+ * meanings (住: live / stop) isn't confirmed by a different sentence.
+ * Otherwise the whole item's Chinese is used.
  */
-export function diglotItem(item, translation, map, level) {
+export function diglotItem(item, translation, map, level, options = {}) {
   const segments = Array.isArray(item) ? item : [item];
   const full = Array.isArray(translation) ? translation.join('') : translation;
-  const inTranslation = translationWords(full);
+  const starts = sentenceStarts(segments.join(''));
+  const zhSentences = full.match(ZH_SENTENCE)?.filter((z) => z.trim()) ?? [];
+  const aligned = starts.length > 1 && starts.length === zhSentences.length;
+  const tests = (aligned ? zhSentences : [full]).map((zh) => translationWords(zh, options.isWord));
   const out = { segments: [], ranges: [], full };
+  let offset = 0;
   for (const text of segments) {
-    const { text: mixed, ranges } = applySwaps(text, findSwaps(text, map, level, inTranslation));
+    // Cut the segment at sentence starts; each piece uses its sentence's test.
+    const cuts = aligned ? starts.filter((s) => s > offset && s < offset + text.length).map((s) => s - offset) : [];
+    const swaps = [];
+    [0, ...cuts].forEach((from, k, all) => {
+      const to = all[k + 1] ?? text.length;
+      const sentence = aligned ? starts.findLastIndex((s) => s <= offset + from) : 0;
+      for (const swap of findSwaps(text.slice(from, to), map, level, tests[sentence], options)) {
+        swaps.push({ ...swap, start: swap.start + from, end: swap.end + from });
+      }
+    });
+    const { text: mixed, ranges } = applySwaps(text, swaps);
     out.segments.push(mixed);
     out.ranges.push(ranges);
+    offset += text.length;
   }
   return out;
 }
@@ -178,4 +241,10 @@ export function diglotItem(item, translation, map, level) {
 /** The English replaced by the swapped word covering `offset`, or ''. */
 export function replacedAt(ranges, offset) {
   return ranges?.find(([start, end]) => offset >= start && offset < end)?.[2] ?? '';
+}
+
+/** A graded result with nothing swapped (the item's English as it is). */
+export function ungradedItem(item) {
+  const segments = Array.isArray(item) ? item : [item];
+  return { segments, ranges: segments.map(() => []), full: null };
 }
