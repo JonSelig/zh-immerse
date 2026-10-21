@@ -161,3 +161,48 @@ test('sentence matching handles a sentence start at a segment boundary and citat
   const cited = diglotItem('I live in China.[1] She ran to the bus stop.', BLOCK_ZH, stopMap, 1, { isWord });
   assert.equal(cited.segments[0], 'I 住在 China.[1] She ran to the bus stop.');
 });
+
+const rightMap = parseWordMap([
+  'right\t是:1,对:1,正:1,右:1,右边:1,当:2,不错:2,正确:2,权利:4,权:6',
+  'right side\t右边:1',
+].join('\n'));
+const LOCKER_EN = 'You can find a bank of lockers on your right opposite the Central Ticket Office.';
+const LOCKER_ZH = '在中央售票处对面，您的右边是一排储物柜。';
+const pairs = (swaps) => swaps.map((s) => [s.en, s.zh]);
+
+test('the longest Chinese word for an English word wins (right -> 右边, not 是)', () => {
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, rightMap, 1, translationWords(LOCKER_ZH))), [['right', '右边']]);
+});
+
+test('a longer word above the level keeps the English', () => {
+  const zh = '你的答案是正确的。';
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 1, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('Your answer is right.', rightMap, 2, translationWords(zh))), [['right', '正确']]);
+});
+
+test('equal lengths keep the list order', () => {
+  const like = parseWordMap(['like\t爱:1,喜欢:1,一样:1', 'apple\t苹果:1'].join('\n'));
+  assert.deepEqual(pairs(findSwaps('I like apples.', like, 1, translationWords('我喜欢一样的苹果。'))),
+    [['like', '喜欢'], ['apples', '苹果']]);
+});
+
+test('at 我的, HSK competitors block a shorter word from the list', () => {
+  const mine = new Map([['right', [{ zh: '是', level: 0 }]]]);
+  const inZh = translationWords(LOCKER_ZH);
+  // The list alone would pick 是; the sentence uses the more specific 右边.
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh)), [['right', '是']]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, inZh, { competitors: rightMap })), []);
+});
+
+test('at 我的, a competitor that is also on the list is known', () => {
+  const mine = new Map([['right', [{ zh: '右边', level: 0 }, { zh: '是', level: 0 }]]]);
+  assert.deepEqual(pairs(findSwaps(LOCKER_EN, mine, 0, translationWords(LOCKER_ZH), { competitors: rightMap })),
+    [['right', '右边']]);
+});
+
+test('a blocked phrase keeps its words English', () => {
+  const map2 = parseWordMap(['bus stop\t公交车站:3', 'bus\t公交车:2', 'stop\t站:1'].join('\n'));
+  const zh = '他在公交车站等。';
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 2, translationWords(zh))), []);
+  assert.deepEqual(pairs(findSwaps('He waits at the bus stop.', map2, 3, translationWords(zh))), [['bus stop', '公交车站']]);
+});

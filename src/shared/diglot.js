@@ -12,6 +12,8 @@
 // whole sentence. That picks the right sense and keeps context-sensitive
 // words honest: "like" becomes 喜欢 in "I like apples" (我喜欢苹果) but stays
 // English in "it looks like rain" (看起来要下雨了).
+// When the translation has several candidates, the longest wins: "on your
+// right" (您的右边是…) gives 右边, not 是 ("is").
 
 export const MY_LEVEL = 0;
 export const FULL_LEVEL = 7;
@@ -119,13 +121,19 @@ const TOKEN = /[A-Za-z]+(?:['’][A-Za-z]+)*/g;
 /**
  * Finds English words/phrases in `text` to swap at `level`.
  * -> [{ start, end, zh, en }] in text order, non-overlapping.
+ * Of the candidates the translation contains, only the longest count: the
+ * first known one of that length is swapped in, or none (the sentence uses a
+ * meaning the reader hasn't learned).
  * Options: `isWord` (dictionary check) enables verb + preposition phrases
  * (live in -> 住在) when the translation has them as a non-word segment;
- * `knownPrep(p)` says whether 在/到/给/成 may be shown (default: by HSK level).
+ * `knownPrep(p)` says whether 在/到/给/成 may be shown (default: by HSK level);
+ * `competitors` (at 我的, the HSK map) adds candidates that compete but are
+ * never shown unless the same word is also in `map`.
  */
 export function findSwaps(text, map, level, inTranslation, {
   isWord = null,
   knownPrep = (p) => VERB_PREPS[p].level <= level,
+  competitors = null,
 } = {}) {
   const tokens = [...text.matchAll(TOKEN)].map((m) => {
     let word = m[0];
@@ -140,13 +148,24 @@ export function findSwaps(text, map, level, inTranslation, {
       if (span.some((t, k) => k > 0 && !/^[ -]$/.test(text.slice(span[k - 1].end, t.start)))) continue;
       const head = span.slice(0, -1).map((t) => t.word.toLowerCase());
       const last = span.at(-1).word;
-      let entry = null;
+      // Every candidate for this English, the map's first, then competitors.
+      const candidates = [];
       for (const form of lemmas(last)) {
-        entry = map.get([...head, form].join(' '))
-          ?.find((c) => c.level <= level && inTranslation(c.zh));
-        if (entry) break;
+        const key = [...head, form].join(' ');
+        for (const c of [...(map.get(key) ?? []), ...(competitors?.get(key) ?? [])]) {
+          if (!candidates.some((x) => x.zh === c.zh)) candidates.push(c);
+        }
       }
-      if (!entry) continue;
+      const present = candidates.filter((c) => inTranslation(c.zh));
+      if (!present.length) continue;
+      // The sentence's most specific word for it decides: swap it if it's
+      // known, otherwise leave the English (right -> 右边, never 是 "is").
+      const longest = Math.max(...present.map((c) => c.zh.length));
+      const entry = present.find((c) => c.zh.length === longest && c.level <= level);
+      if (!entry) {
+        i += n - 1; // the whole phrase stays English
+        break;
+      }
       const start = span[0].start;
       let end = span.at(-1).end;
       let { zh } = entry;
