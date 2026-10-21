@@ -36,8 +36,12 @@ const chinesePage = () => /^zh\b/i.test(document.documentElement.lang);
 function apply() {
   const on = settings.enabled && !siteDisabled();
   translator.setLevel(settings.level);
-  if (on && !pageOff && !chinesePage()) translator.start();
-  else translator.stop();
+  if (on && !pageOff && !chinesePage()) {
+    translator.start();
+  } else if (translator.active) {
+    translator.stop();
+    send({ type: 'cancel' }).catch(() => {}); // drop this tab's queued text
+  }
   translator.setPinyin(settings.pinyin);
   // The hover dictionary also works on pages that are already in Chinese.
   if (on) {

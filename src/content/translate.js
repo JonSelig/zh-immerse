@@ -301,6 +301,16 @@ export class PageTranslator {
     try {
       results = await this.translateFn(items, this.level, urgent);
     } catch (err) {
+      if (err.code === 'cancelled') {
+        // The background dropped the request (e.g. the tab navigated). If this
+        // page is still here and translating, ask again once it's in view.
+        if (stale()) return;
+        this.seen.unobserve(unit);
+        state.status = 'observed';
+        state.items = null;
+        this.io.observe(unit);
+        return;
+      }
       if (['hostMissing', 'notInstalled', 'unsupported'].includes(err.code)) this.blocked = err.code;
       this.onError(err);
       if (stale()) return;

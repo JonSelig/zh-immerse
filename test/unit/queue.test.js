@@ -57,3 +57,15 @@ test('take respects the item and character limits, but always takes one', () => 
   assert.deepEqual(lanes.take(3, 6, len), ['x'.repeat(50)]);
   assert.deepEqual(lanes.take(3, 6, len), []);
 });
+
+test('a waiting key can be checked and removed; a taken one cannot', () => {
+  const lanes = new Lanes();
+  lanes.add('a', true);
+  lanes.add('b', false);
+  assert.ok(lanes.has('a') && lanes.has('b'));
+  assert.deepEqual(lanes.take(1, 1000, (k) => k.length), ['a']); // 'a' is now in flight
+  assert.equal(lanes.has('a'), false);
+  assert.equal(lanes.remove('a'), false);
+  assert.equal(lanes.remove('b'), true);
+  assert.equal(lanes.size, 0);
+});

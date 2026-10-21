@@ -1,7 +1,7 @@
 // Background script: routes messages from content scripts, the popup and the
 // vocab page to the translator, dictionary and word store.
 
-import { translateItems, prioritize, clearCache } from './translator.js';
+import { translateItems, prioritize, cancel, clearCache } from './translator.js';
 import { gradeItems } from './graded.js';
 import { FULL_LEVEL, MY_LEVEL, ungradedItem } from '../shared/diglot.js';
 import { hostStatus } from './native.js';
@@ -30,6 +30,9 @@ function siteOf(sender) {
   }
 }
 
+/** Who a translation request belongs to: the tab and frame that sent it. */
+const ownerOf = (sender) => (sender?.tab?.id != null ? `${sender.tab.id}:${sender.frameId ?? 0}` : null);
+
 const EXTENSION_BASE = browser.runtime.getURL('');
 
 // Size of My words, cached for the empty-list check on every translate message.
@@ -47,7 +50,9 @@ const handlers = {
       if (level === MY_LEVEL && !(await myWordCount())) {
         return { graded: items.map(ungradedItem) };
       }
-      const translations = await translateItems(items, { site: siteOf(sender), persist: !isPrivate(sender), urgent: urgent !== false });
+      const translations = await translateItems(items, {
+        site: siteOf(sender), persist: !isPrivate(sender), urgent: urgent !== false, owner: ownerOf(sender),
+      });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };
     } catch (err) {
@@ -58,6 +63,13 @@ const handlers = {
   // Text the page asked for ahead of scrolling is now on screen.
   prioritize({ items }, sender) {
     prioritize(items, { site: siteOf(sender) });
+    return null;
+  },
+
+  // The tab stopped translating (switched to English, site turned off).
+  cancel(_msg, sender) {
+    const owner = ownerOf(sender);
+    if (owner) cancel(owner);
     return null;
   },
 
@@ -105,6 +117,15 @@ onMessage((msg, sender) => {
   const refused = refusal(msg, sender, EXTENSION_BASE);
   if (refused) return Promise.reject(new Error(`${msg.type} refused: ${refused}`));
   return Promise.resolve(handler(msg, sender));
+});
+
+// A tab that reloads, navigates or closes no longer needs its queued text.
+// (If the page is still there, e.g. a single-page app navigating, its
+// translator just asks again; see 'cancelled' in content/translate.js.)
+const cancelTab = (tabId) => cancel(`${tabId}:0`);
+browser.tabs.onRemoved.addListener(cancelTab);
+browser.tabs.onUpdated.addListener((tabId, change) => {
+  if (change.status === 'loading') cancelTab(tabId);
 });
 
 async function activeTab() {

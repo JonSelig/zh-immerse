@@ -4,6 +4,10 @@
 // text near it (see shared/queue.js). The IndexedDB cache holds the
 // text of pages the user has read, so it is capped and can be cleared.
 //
+// Each request has an owner (the tab and frame asking). cancel(owner) drops
+// that owner's requests that haven't been sent yet, so a tab that navigates
+// away or stops translating doesn't leave a backlog in front of other pages.
+//
 // Both caches are kept per site. With one shared cache, a page could insert
 // another site's exact text and time how fast it turns into Chinese: a cache
 // hit would show the user had read that text before.
@@ -25,7 +29,7 @@ const STORED_CAP = 50_000; // rows kept in IndexedDB, oldest dropped first
 const PRUNE_EVERY = 500; // stored rows between prunes (and once after startup)
 
 const memory = new Map(); // key -> translation (insertion order = LRU order)
-const waiting = new Map(); // key -> { item, persist, callbacks: [{ resolve, reject }] }
+const waiting = new Map(); // key -> { item, persist, callbacks: [{ resolve, reject, owner }] }
 const lanes = new Lanes(); // waiting keys, on screen first
 let inFlight = 0;
 let flushTimer = null;
@@ -45,8 +49,10 @@ function remember(key, value) {
  * the host itself is unavailable. `site` is the hostname of the tab asking,
  * which selects the cache partition. With persist: false (private windows),
  * new translations aren't kept in either cache. urgent: the text is on screen.
+ * owner: who's asking, for cancel(); a cancelled request rejects with code
+ * 'cancelled'.
  */
-export async function translateItems(items, { site = '', persist = true, urgent = true } = {}) {
+export async function translateItems(items, { site = '', persist = true, urgent = true, owner = null } = {}) {
   const keys = items.map((item) => keyOf(site, item));
   const results = new Array(items.length).fill(null);
   const misses = [];
@@ -72,7 +78,7 @@ export async function translateItems(items, { site = '', persist = true, urgent 
     }
   });
 
-  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist, urgent).then((value) => { results[i] = value; })));
+  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist, urgent, owner).then((value) => { results[i] = value; })));
   return results;
 }
 
@@ -81,13 +87,32 @@ export function prioritize(items, { site = '' } = {}) {
   for (const item of items) lanes.promote(keyOf(site, item));
 }
 
+/**
+ * Drops `owner`'s requests that haven't been sent. A text other tabs also
+ * asked for stays queued for them; text already being translated finishes.
+ */
+export function cancel(owner) {
+  const cancelled = Object.assign(new Error('translation cancelled'), { code: 'cancelled' });
+  for (const [key, entry] of waiting) {
+    if (!lanes.has(key)) continue; // in flight
+    const mine = entry.callbacks.filter((c) => c.owner === owner);
+    if (!mine.length) continue;
+    entry.callbacks = entry.callbacks.filter((c) => c.owner !== owner);
+    mine.forEach(({ reject }) => reject(cancelled));
+    if (!entry.callbacks.length) {
+      waiting.delete(key);
+      lanes.remove(key);
+    }
+  }
+}
+
 /** Empties both caches. */
 export function clearCache() {
   memory.clear();
   return db.clear('translations');
 }
 
-function enqueue(key, item, persist, urgent) {
+function enqueue(key, item, persist, urgent, owner) {
   return new Promise((resolve, reject) => {
     let entry = waiting.get(key);
     if (!entry) {
@@ -98,7 +123,7 @@ function enqueue(key, item, persist, urgent) {
       lanes.promote(key); // no-op once it's in flight
     }
     entry.persist ||= persist; // kept if any tab asking for it may keep it
-    entry.callbacks.push({ resolve, reject });
+    entry.callbacks.push({ resolve, reject, owner });
     flushTimer ??= setTimeout(() => { flushTimer = null; pump(); }, 15);
   });
 }
