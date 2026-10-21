@@ -47,3 +47,10 @@ test('dictEntries is page-only and size-checked', () => {
   assert.match(refusal({ type: 'dictEntries', words: ['中'.repeat(40)] }, page, BASE), /word list/);
   assert.match(refusal({ type: 'dictEntries', words: new Array(20_001).fill('中') }, page, BASE), /word list/);
 });
+
+test('prioritize is allowed from pages and size-checked like translate', () => {
+  assert.equal(refusal({ type: 'prioritize', items: ['Hello', ['Read the ', 'docs']] }, content, BASE), null);
+  assert.match(refusal({ type: 'prioritize', items: 'Hello' }, content, BASE), /items/);
+  assert.match(refusal({ type: 'prioritize', items: new Array(5000).fill('a') }, content, BASE), /items/);
+  assert.match(refusal({ type: 'prioritize', items: ['a'.repeat(2_000_000)] }, content, BASE), /text/);
+});

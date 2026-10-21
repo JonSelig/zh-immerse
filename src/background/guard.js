@@ -25,7 +25,7 @@ function itemChars(item) {
 /** null if the message may be handled, otherwise why it was refused. */
 export function refusal(msg, sender, base) {
   if (PAGE_ONLY.has(msg.type) && !fromExtensionPage(sender, base)) return 'only allowed from extension pages';
-  if (msg.type === 'translate') {
+  if (msg.type === 'translate' || msg.type === 'prioritize') {
     if (!Array.isArray(msg.items) || msg.items.length > MAX_ITEMS) return 'too many items';
     if (msg.items.reduce((n, item) => n + itemChars(item), 0) > MAX_CHARS) return 'too much text';
   }

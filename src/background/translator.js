@@ -1,6 +1,7 @@
 // Translation queue shared by all tabs: memory cache -> IndexedDB cache ->
 // batched requests to the native host. Identical texts requested while a
-// translation is in flight share one request. The IndexedDB cache holds the
+// translation is in flight share one request. Text on screen goes before
+// text near it (see shared/queue.js). The IndexedDB cache holds the
 // text of pages the user has read, so it is capped and can be cleared.
 //
 // Both caches are kept per site. With one shared cache, a page could insert
@@ -9,17 +10,23 @@
 
 import { request } from './native.js';
 import * as db from './db.js';
+import { Lanes } from '../shared/queue.js';
 
-const BATCH_ITEMS = 16;
-const BATCH_CHARS = 3000;
-const MAX_IN_FLIGHT = 2;
+// Apple's translator works through items one at a time (about 0.35 s per
+// sentence) and a batch's results come back together, so batching saves
+// nothing: one item per request shows each paragraph as soon as it's done.
+// One request in flight, so each next item is picked from the latest
+// on-screen requests.
+const BATCH_ITEMS = 1;
+const BATCH_CHARS = 3000; // only matters if BATCH_ITEMS is raised again
+const MAX_IN_FLIGHT = 1;
 const MEMORY_CAP = 5000;
 const STORED_CAP = 50_000; // rows kept in IndexedDB, oldest dropped first
 const PRUNE_EVERY = 500; // stored rows between prunes (and once after startup)
 
 const memory = new Map(); // key -> translation (insertion order = LRU order)
 const waiting = new Map(); // key -> { item, persist, callbacks: [{ resolve, reject }] }
-const queue = []; // keys, FIFO
+const lanes = new Lanes(); // waiting keys, on screen first
 let inFlight = 0;
 let flushTimer = null;
 let writesSincePrune = PRUNE_EVERY;
@@ -37,9 +44,9 @@ function remember(key, value) {
  * item; null where the host could not translate. Rejects (with err.code) when
  * the host itself is unavailable. `site` is the hostname of the tab asking,
  * which selects the cache partition. With persist: false (private windows),
- * new translations aren't kept in either cache.
+ * new translations aren't kept in either cache. urgent: the text is on screen.
  */
-export async function translateItems(items, { site = '', persist = true } = {}) {
+export async function translateItems(items, { site = '', persist = true, urgent = true } = {}) {
   const keys = items.map((item) => keyOf(site, item));
   const results = new Array(items.length).fill(null);
   const misses = [];
@@ -65,8 +72,13 @@ export async function translateItems(items, { site = '', persist = true } = {}) 
     }
   });
 
-  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist).then((value) => { results[i] = value; })));
+  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist, urgent).then((value) => { results[i] = value; })));
   return results;
+}
+
+/** Moves waiting items (now on screen) ahead of text near the screen. */
+export function prioritize(items, { site = '' } = {}) {
+  for (const item of items) lanes.promote(keyOf(site, item));
 }
 
 /** Empties both caches. */
@@ -75,13 +87,15 @@ export function clearCache() {
   return db.clear('translations');
 }
 
-function enqueue(key, item, persist) {
+function enqueue(key, item, persist, urgent) {
   return new Promise((resolve, reject) => {
     let entry = waiting.get(key);
     if (!entry) {
       entry = { item, persist: false, callbacks: [] };
       waiting.set(key, entry);
-      queue.push(key);
+      lanes.add(key, urgent);
+    } else if (urgent) {
+      lanes.promote(key); // no-op once it's in flight
     }
     entry.persist ||= persist; // kept if any tab asking for it may keep it
     entry.callbacks.push({ resolve, reject });
@@ -90,15 +104,8 @@ function enqueue(key, item, persist) {
 }
 
 function pump() {
-  while (inFlight < MAX_IN_FLIGHT && queue.length) {
-    const batch = [];
-    let chars = 0;
-    while (queue.length && batch.length < BATCH_ITEMS) {
-      const len = queue[0].length;
-      if (batch.length && chars + len > BATCH_CHARS) break;
-      batch.push(queue.shift());
-      chars += len;
-    }
+  while (inFlight < MAX_IN_FLIGHT && lanes.size) {
+    const batch = lanes.take(BATCH_ITEMS, BATCH_CHARS, (key) => key.length);
     inFlight++;
     sendBatch(batch).finally(() => { inFlight--; pump(); });
   }
