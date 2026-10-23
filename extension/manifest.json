@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "zh-immerse",
-  "version": "0.1.2",
+  "version": "0.1.8",
   "description": "Shows English web pages in Simplified Chinese (on-device, via Apple Translation), with pinyin, a hover dictionary and a word list of what you look up.",
   "browser_specific_settings": {
     "gecko": {

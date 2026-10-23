@@ -1,6 +1,6 @@
 {
   "name": "zh-immerse",
-  "version": "0.1.2",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "description": "Firefox and Chrome extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
