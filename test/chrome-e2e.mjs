@@ -199,7 +199,18 @@ try {
   })()`), 40000);
   check('on-screen text still translates after an in-app navigation', !!onScreenDone.value, `${onScreenDone.value} passages in ${onScreenDone.ms} ms`);
 
-  // 7. Popup page renders and reports the translator as ready.
+  // 7. Best quality: switching redoes the page with the high-fidelity model.
+  await cdp('Target.activateTarget', { targetId: thread.targetId });
+  const sw2 = await worker();
+  await sw2(`chrome.storage.local.set({ quality: 'best' })`);
+  const best = await until(() => thread.eval(`(() => {
+    const p = document.querySelector('.comment p');
+    return /[\\u4e00-\\u9fff]/.test(p.textContent) && p.textContent;
+  })()`), 30000);
+  check('Best quality switch redoes the page', !!best.value, `${best.ms} ms: ${best.value}`);
+  await sw2(`chrome.storage.local.set({ quality: 'fast' })`);
+
+  // 8. Popup page renders and reports the translator as ready.
   const popup = await open(`chrome-extension://${CHROME_ID}/popup/popup.html`);
   const status = await until(() => popup.eval(`document.getElementById('status').textContent`));
   check('popup reports translator status', /ready/i.test(status.value ?? ''), status.value);

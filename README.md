@@ -7,6 +7,12 @@ reading aids are there when a sentence is too hard:
 - **Hover a word** for its pinyin (tone-colored), meanings (CC-CEDICT) and the
   original English of the sentence.
 - **Pinyin above characters**: toggle with ⌥⇧P or from the toolbar popup.
+- **Fast or Best quality** (toolbar popup): Fast, the default, uses Apple's
+  low-latency model, so a busy Reddit thread fills in almost at once. **Best
+  quality** uses the high-fidelity model: a little better with idioms and
+  technical terms, but several times slower (roughly 0.2–1.5 s per paragraph
+  against 0.02–0.2 s). Each mode has its own cache; Fast also reuses anything
+  already translated in Best.
 - **Listen**: 🔊 in the popup plays the word (or press **P**); *🔊 Sentence*
   plays the whole sentence (**Shift+P**). Select any Chinese text to get a 🔊
   button for that phrase. This uses the Mac's built-in voices (Tingting by

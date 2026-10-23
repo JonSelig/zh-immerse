@@ -44,7 +44,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 const handlers = {
-  async translate({ items, level = FULL_LEVEL, urgent = true }, sender) {
+  async translate({ items, level = FULL_LEVEL, urgent = true, quality = 'fast' }, sender) {
     try {
       // 我的 with an empty list swaps nothing: don't translate at all.
       if (level === MY_LEVEL && !(await myWordCount())) {
@@ -52,6 +52,7 @@ const handlers = {
       }
       const translations = await translateItems(items, {
         site: siteOf(sender), persist: !isPrivate(sender), urgent: urgent !== false, owner: ownerOf(sender),
+        quality: quality === 'best' ? 'best' : 'fast',
       });
       if (level >= FULL_LEVEL) return { translations };
       return { graded: await gradeItems(items, translations, level) };

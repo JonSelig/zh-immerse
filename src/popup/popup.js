@@ -68,6 +68,8 @@ function render() {
   $('editMyWords').hidden = settings.level !== MY_LEVEL;
   $('enabled').checked = settings.enabled;
   $('pinyin').checked = settings.pinyin;
+  $('bestQuality').checked = settings.quality === 'best';
+  $('bestQuality').disabled = !settings.enabled;
   $('site').textContent = site || 'this site';
   $('siteEnabled').checked = !site || !settings.disabledSites.includes(site);
   $('siteEnabled').disabled = !site || !settings.enabled;
@@ -98,6 +100,7 @@ async function init() {
 
   $('enabled').addEventListener('change', (e) => save({ enabled: e.target.checked }));
   $('pinyin').addEventListener('change', (e) => save({ pinyin: e.target.checked }));
+  $('bestQuality').addEventListener('change', (e) => save({ quality: e.target.checked ? 'best' : 'fast' }));
   for (const b of document.querySelectorAll('#levels button')) {
     b.addEventListener('click', () => save({ level: Number(b.dataset.level) }));
   }
