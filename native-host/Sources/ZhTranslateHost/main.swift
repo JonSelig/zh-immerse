@@ -178,6 +178,9 @@ func splitTagged(_ text: String, count: Int) -> [String]? {
 /// message loop, so the session is never used concurrently.
 final class Translator {
     private var sessions: [Quality: TranslationSession] = [:]
+    /// Set when the low-latency model turns out not to be downloaded (it is a
+    /// separate download from the high-fidelity one); fast then uses best.
+    private var fastMissing = false
 
     func status() async -> String {
         statusName(await LanguageAvailability().status(from: source, to: target))
@@ -230,6 +233,7 @@ final class Translator {
         }
         if requests.isEmpty { return results }
 
+        if quality == .fast && fastMissing { return try await translate(items, quality: .best) }
         let session = session(for: quality)
         do {
             for response in try await session.translations(from: requests) {
@@ -238,7 +242,10 @@ final class Translator {
                 }
             }
         } catch TranslationError.notInstalled {
-            throw TranslationError.notInstalled
+            guard quality == .fast else { throw TranslationError.notInstalled }
+            log("low-latency model not installed; using high-fidelity")
+            fastMissing = true
+            return try await translate(items, quality: .best)
         } catch {
             log("batch failed (\(error)); retrying \(requests.count) items individually")
             for request in requests {
