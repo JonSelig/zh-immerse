@@ -31,22 +31,47 @@ export function pickVoice(voices) {
   return ranked[0]?.[1] ?? null;
 }
 
-function chineseVoice() {
+let voiceName = null; // the chosen voice's voiceURI, looked up fresh on each play
+
+/**
+ * The Mandarin voice to use. Only its identifier is cached: Firefox can
+ * rebuild its voice list after the first use, and a stale voice object makes
+ * later utterances fail silently.
+ */
+async function chineseVoice() {
   voiceLoading ??= new Promise((resolve) => {
-    const voices = speechSynthesis.getVoices();
-    if (voices.length) {
-      resolve(pickVoice(voices));
+    if (speechSynthesis.getVoices().length) {
+      resolve();
       return;
     }
     // Voices load asynchronously the first time.
-    const done = () => resolve(pickVoice(speechSynthesis.getVoices()));
-    speechSynthesis.addEventListener('voiceschanged', done, { once: true });
-    setTimeout(done, 1500);
+    speechSynthesis.addEventListener('voiceschanged', () => resolve(), { once: true });
+    setTimeout(resolve, 1500);
   });
-  return voiceLoading;
+  await voiceLoading;
+  const voices = speechSynthesis.getVoices();
+  const known = voiceName && voices.find((v) => v.voiceURI === voiceName);
+  if (known) return known;
+  const picked = pickVoice(voices);
+  voiceName = picked?.voiceURI ?? null;
+  return picked;
 }
 
 export const canSpeak = () => typeof speechSynthesis !== 'undefined';
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The utterance being spoken. Keeping a reference stops it from being garbage
+// collected mid-speech, which in some engines leaves the queue stuck.
+let current = null;
+
+function utter(text, voice) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = voice?.lang ?? 'zh-CN';
+  if (voice) utterance.voice = voice;
+  utterance.rate = RATE;
+  return utterance;
+}
 
 /**
  * Speaks `text` in Mandarin, interrupting anything already playing.
@@ -55,16 +80,43 @@ export const canSpeak = () => typeof speechSynthesis !== 'undefined';
  */
 export async function speak(text) {
   if (!canSpeak() || !text.trim()) return { voice: null };
+  const synth = speechSynthesis;
   const voice = await chineseVoice();
-  speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = voice?.lang ?? 'zh-CN';
-  if (voice) utterance.voice = voice;
-  utterance.rate = RATE;
-  speechSynthesis.speak(utterance);
+
+  // Firefox applies cancel() asynchronously: speaking straight after it can
+  // get the new utterance cancelled too, so only the first play worked.
+  // Only cancel when needed, then wait a moment.
+  if (synth.speaking || synth.pending || current) {
+    synth.cancel();
+    current = null;
+    await delay(80);
+  }
+  if (synth.paused) synth.resume();
+
+  const utterance = utter(text, voice);
+  current = utterance;
+  let started = false;
+  utterance.onstart = () => { started = true; };
+  utterance.onend = utterance.onerror = () => { if (current === utterance) current = null; };
+  synth.speak(utterance);
+
+  // Watchdog: if the engine is wedged and nothing starts, reset it and retry once.
+  setTimeout(async () => {
+    if (started || current !== utterance) return;
+    synth.cancel();
+    await delay(80);
+    if (current !== utterance) return;
+    const retry = utter(text, voice);
+    current = retry;
+    retry.onend = retry.onerror = () => { if (current === retry) current = null; };
+    synth.speak(retry);
+  }, 1000);
+
   return { voice };
 }
 
 export function stopSpeaking() {
-  if (canSpeak()) speechSynthesis.cancel();
+  if (!canSpeak()) return;
+  current = null;
+  speechSynthesis.cancel();
 }

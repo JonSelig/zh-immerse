@@ -44,6 +44,15 @@ async function main() {
   const again = Date.now();
   await host.send({ type: 'translate', texts: ['This is a second request on a warm session.'] });
   console.log(`warm single request: ${Date.now() - again} ms`);
+
+  // Both qualities: "fast" (low latency, the default) and "best" (high fidelity).
+  for (const quality of ['fast', 'best']) {
+    const t = Date.now();
+    const r = await host.send({ type: 'translate', quality, texts: [['Please read the ', 'installation guide', ` before you start (${quality}).`]] });
+    const segs = r.translations?.[0];
+    assert.ok(Array.isArray(segs) && segs.length === 3 && /[一-鿿]/.test(segs[1]), `${quality}: ${JSON.stringify(r)}`);
+    console.log(`${quality}: ${JSON.stringify(segs)} in ${Date.now() - t} ms`);
+  }
   host.close();
   console.log('OK');
 }

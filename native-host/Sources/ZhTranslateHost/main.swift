@@ -7,6 +7,8 @@
 //      An item is a string, or an array of segments (adjacent text runs, e.g.
 //      split by links). Segments are translated together as one sentence and
 //      the result is split back into the same number of segments. null = failed.
+//      Optional "quality": "fast" (the default; Apple's low-latency model) or
+//      "best" (the high-fidelity model: a little better, several times slower).
 //   -> {"id": 2, "type": "status"}
 //   <- {"id": 2, "status": "installed" | "supported" | "unsupported"}
 //   <- {"id": n, "error": "...", "code": "notInstalled" | ...}
@@ -15,6 +17,7 @@
 //   zh-translate-host --status
 //   zh-translate-host --translate "text" ...
 //   zh-translate-host --segments "Read the " "docs" " first."
+//   (ZH_QUALITY=best selects the high-fidelity model for these.)
 // stdout is reserved for protocol frames; diagnostics go to stderr.
 
 import Foundation
@@ -49,6 +52,14 @@ struct Incoming: Decodable {
     let id: Int
     let type: String
     let texts: [Item]?
+    let quality: String?
+}
+
+/// "best" selects Apple's high-fidelity model; anything else the low-latency one.
+enum Quality {
+    case fast, best
+    init(_ name: String?) { self = name == "best" ? .best : .fast }
+    var strategy: TranslationSession.Strategy { self == .best ? .highFidelity : .lowLatency }
 }
 
 struct Outgoing: Encodable {
@@ -166,16 +177,16 @@ func splitTagged(_ text: String, count: Int) -> [String]? {
 /// Owns the single TranslationSession. Calls are made one at a time by the
 /// message loop, so the session is never used concurrently.
 final class Translator {
-    private var session: TranslationSession?
+    private var sessions: [Quality: TranslationSession] = [:]
 
     func status() async -> String {
         statusName(await LanguageAvailability().status(from: source, to: target))
     }
 
-    private func currentSession() -> TranslationSession {
-        if let session { return session }
-        let made = TranslationSession(installedSource: source, target: target, preferredStrategy: .highFidelity)
-        session = made
+    private func session(for quality: Quality) -> TranslationSession {
+        if let session = sessions[quality] { return session }
+        let made = TranslationSession(installedSource: source, target: target, preferredStrategy: quality.strategy)
+        sessions[quality] = made
         return made
     }
 
@@ -207,7 +218,7 @@ final class Translator {
     /// Translates a batch. Blank inputs pass through unchanged. If the batch
     /// fails as a whole, items are retried individually so one bad string
     /// doesn't sink the rest; items that still fail come back as nil.
-    func translate(_ items: [Item]) async throws -> [Item?] {
+    func translate(_ items: [Item], quality: Quality = .fast) async throws -> [Item?] {
         var results = [Item?](repeating: nil, count: items.count)
         var requests: [TranslationSession.Request] = []
         for (index, item) in items.enumerated() {
@@ -219,7 +230,7 @@ final class Translator {
         }
         if requests.isEmpty { return results }
 
-        let session = currentSession()
+        let session = session(for: quality)
         do {
             for response in try await session.translations(from: requests) {
                 if let id = response.clientIdentifier, let index = Int(id) {
@@ -253,7 +264,7 @@ func handle(_ frame: Data) async {
         writeFrame(Outgoing(id: message.id, status: await translator.status()))
     case "translate":
         do {
-            let translations = try await translator.translate(message.texts ?? [])
+            let translations = try await translator.translate(message.texts ?? [], quality: Quality(message.quality))
             writeFrame(Outgoing(id: message.id, translations: translations))
         } catch {
             writeFrame(Outgoing(id: message.id, error: error.localizedDescription, code: errorCode(error)))
@@ -286,7 +297,8 @@ if let mode = args.first, cliModes.contains(mode) {
         let items: [Item] = mode == "--segments" ? [.segments(rest)] : rest.map { .text($0) }
         do {
             let started = Date()
-            for item in try await translator.translate(items) { print(describe(item)) }
+            let quality = Quality(ProcessInfo.processInfo.environment["ZH_QUALITY"])
+            for item in try await translator.translate(items, quality: quality) { print(describe(item)) }
             log(String(format: "%.0f ms", Date().timeIntervalSince(started) * 1000))
             exit(0)
         } catch {

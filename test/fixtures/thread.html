@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Long thread fixture</title>
+  <style>
+    body { font: 15px/1.5 Verdana, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; }
+    .comment { border-left: 2px solid #ddd; padding: 6px 12px; margin: 10px 0; }
+    .tagline { color: #888; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Open-source game streaming client removes tracking and idle limits</h1>
+  <div id="thread"></div>
+  <script>
+    // ~120 comments with distinct text, like a busy Reddit thread.
+    const openers = ['Honestly,', 'To be fair,', 'In my experience,', 'I think', 'Funny enough,', 'As someone who plays a lot,', 'Correct me if I am wrong, but', 'From what I have read,'];
+    const middles = [
+      'the monthly hour limit is generous for most people',
+      'streaming quality depends far more on your internet connection than on the client',
+      'removing telemetry is a nice bonus even if the service still sees what you play',
+      'the official app has become slower with every update',
+      'idle disconnects save hours when you walk away from the computer',
+      'buying a graphics card is hard to justify at current prices',
+      'cloud gaming works surprisingly well for slower single player games',
+      'competitive shooters still feel a little delayed over the network',
+    ];
+    const endings = ['so I will probably try it this weekend.', 'which is why I cancelled my subscription last year.', 'but your results may vary depending on where you live.', 'and the developers deserve credit for publishing the code.', 'although I would wait for a few more releases first.'];
+    const thread = document.getElementById('thread');
+    for (let i = 0; i < 120; i++) {
+      const c = document.createElement('div');
+      c.className = 'comment';
+      c.innerHTML = `<div class="tagline">user_${i} · ${i % 23 + 1} points · ${i % 7 + 1} hours ago</div>` +
+        `<p>${openers[i % openers.length]} ${middles[(i * 3) % middles.length]}, ${endings[(i * 7) % endings.length]}</p>` +
+        (i % 3 === 0 ? `<p>Comment number ${i + 1} adds that ${middles[(i * 5 + 1) % middles.length]}.</p>` : '');
+      thread.append(c);
+    }
+  </script>
+</body>
+</html>

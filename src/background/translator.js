@@ -4,6 +4,14 @@
 // text near it (see shared/queue.js). The IndexedDB cache holds the
 // text of pages the user has read, so it is capped and can be cleared.
 //
+// Each request has an owner (the tab and frame asking). cancel(owner) drops
+// that owner's requests that haven't been sent yet, so a tab that navigates
+// away or stops translating doesn't leave a backlog in front of other pages.
+//
+// Two qualities: 'fast' (Apple's low-latency model, the default) and 'best'
+// (high fidelity: a little better, several times slower). They're cached
+// separately, but a fast request is happy with a cached best translation.
+//
 // Both caches are kept per site. With one shared cache, a page could insert
 // another site's exact text and time how fast it turns into Chinese: a cache
 // hit would show the user had read that text before.
@@ -25,13 +33,17 @@ const STORED_CAP = 50_000; // rows kept in IndexedDB, oldest dropped first
 const PRUNE_EVERY = 500; // stored rows between prunes (and once after startup)
 
 const memory = new Map(); // key -> translation (insertion order = LRU order)
-const waiting = new Map(); // key -> { item, persist, callbacks: [{ resolve, reject }] }
+const waiting = new Map(); // key -> { item, persist, callbacks: [{ resolve, reject, owner }] }
 const lanes = new Lanes(); // waiting keys, on screen first
 let inFlight = 0;
 let flushTimer = null;
 let writesSincePrune = PRUNE_EVERY;
 
-const keyOf = (site, item) => `${site}\n${typeof item === 'string' ? item : JSON.stringify(item)}`;
+// Best translations keep the key format from before qualities existed, so
+// that cache stays valid. Item text never contains a newline (whitespace is
+// collapsed), so the two formats can't collide.
+const keyOf = (site, item, quality = 'best') =>
+  `${site}\n${quality === 'fast' ? 'fast\n' : ''}${typeof item === 'string' ? item : JSON.stringify(item)}`;
 
 function remember(key, value) {
   memory.delete(key);
@@ -45,40 +57,70 @@ function remember(key, value) {
  * the host itself is unavailable. `site` is the hostname of the tab asking,
  * which selects the cache partition. With persist: false (private windows),
  * new translations aren't kept in either cache. urgent: the text is on screen.
+ * owner: who's asking, for cancel(); a cancelled request rejects with code
+ * 'cancelled'. quality: 'fast' or 'best'.
  */
-export async function translateItems(items, { site = '', persist = true, urgent = true } = {}) {
-  const keys = items.map((item) => keyOf(site, item));
+export async function translateItems(items, { site = '', persist = true, urgent = true, owner = null, quality = 'fast' } = {}) {
+  const keys = items.map((item) => keyOf(site, item, quality));
+  // Keys a cached translation may sit under: a fast request also takes a
+  // best one.
+  const lookups = items.map((item, i) => (quality === 'fast' ? [keyOf(site, item, 'best'), keys[i]] : [keys[i]]));
   const results = new Array(items.length).fill(null);
   const misses = [];
-  keys.forEach((key, i) => {
-    if (memory.has(key)) {
-      results[i] = memory.get(key);
-      remember(key, results[i]);
+  lookups.forEach((candidates, i) => {
+    const hit = candidates.find((key) => memory.has(key));
+    if (hit) {
+      results[i] = memory.get(hit);
+      remember(hit, results[i]);
     } else {
       misses.push(i);
     }
   });
   if (!misses.length) return results;
 
-  const stored = await db.getMany('translations', misses.map((i) => keys[i])).catch(() => []);
+  const wanted = misses.flatMap((i) => lookups[i]);
+  const stored = await db.getMany('translations', wanted).catch(() => []);
+  const rows = new Map(wanted.map((key, j) => [key, stored[j]]));
   const remaining = [];
-  misses.forEach((i, j) => {
-    const row = stored[j];
-    if (row) {
-      results[i] = row.value;
-      remember(keys[i], row.value);
+  for (const i of misses) {
+    const hit = lookups[i].find((key) => rows.get(key));
+    if (hit) {
+      results[i] = rows.get(hit).value;
+      remember(hit, results[i]);
     } else {
       remaining.push(i);
     }
-  });
+  }
 
-  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist, urgent).then((value) => { results[i] = value; })));
+  await Promise.all(remaining.map((i) => enqueue(keys[i], items[i], persist, urgent, owner, quality).then((value) => { results[i] = value; })));
   return results;
 }
 
 /** Moves waiting items (now on screen) ahead of text near the screen. */
 export function prioritize(items, { site = '' } = {}) {
-  for (const item of items) lanes.promote(keyOf(site, item));
+  for (const item of items) {
+    lanes.promote(keyOf(site, item, 'fast'));
+    lanes.promote(keyOf(site, item, 'best'));
+  }
+}
+
+/**
+ * Drops `owner`'s requests that haven't been sent. A text other tabs also
+ * asked for stays queued for them; text already being translated finishes.
+ */
+export function cancel(owner) {
+  const cancelled = Object.assign(new Error('translation cancelled'), { code: 'cancelled' });
+  for (const [key, entry] of waiting) {
+    if (!lanes.has(key)) continue; // in flight
+    const mine = entry.callbacks.filter((c) => c.owner === owner);
+    if (!mine.length) continue;
+    entry.callbacks = entry.callbacks.filter((c) => c.owner !== owner);
+    mine.forEach(({ reject }) => reject(cancelled));
+    if (!entry.callbacks.length) {
+      waiting.delete(key);
+      lanes.remove(key);
+    }
+  }
 }
 
 /** Empties both caches. */
@@ -87,18 +129,18 @@ export function clearCache() {
   return db.clear('translations');
 }
 
-function enqueue(key, item, persist, urgent) {
+function enqueue(key, item, persist, urgent, owner, quality) {
   return new Promise((resolve, reject) => {
     let entry = waiting.get(key);
     if (!entry) {
-      entry = { item, persist: false, callbacks: [] };
+      entry = { item, quality, persist: false, callbacks: [] };
       waiting.set(key, entry);
       lanes.add(key, urgent);
     } else if (urgent) {
       lanes.promote(key); // no-op once it's in flight
     }
     entry.persist ||= persist; // kept if any tab asking for it may keep it
-    entry.callbacks.push({ resolve, reject });
+    entry.callbacks.push({ resolve, reject, owner });
     flushTimer ??= setTimeout(() => { flushTimer = null; pump(); }, 15);
   });
 }
@@ -106,12 +148,16 @@ function enqueue(key, item, persist, urgent) {
 function pump() {
   while (inFlight < MAX_IN_FLIGHT && lanes.size) {
     const batch = lanes.take(BATCH_ITEMS, BATCH_CHARS, (key) => key.length);
+    // A request has one quality; split the batch if it mixes them.
+    const byQuality = Map.groupBy(batch, (key) => waiting.get(key).quality);
     inFlight++;
-    sendBatch(batch).finally(() => { inFlight--; pump(); });
+    (async () => {
+      for (const [quality, keys] of byQuality) await sendBatch(keys, quality);
+    })().finally(() => { inFlight--; pump(); });
   }
 }
 
-async function sendBatch(keys) {
+async function sendBatch(keys, quality) {
   const items = keys.map((key) => waiting.get(key).item);
   const finish = (key, fn) => {
     const entry = waiting.get(key);
@@ -119,7 +165,7 @@ async function sendBatch(keys) {
     entry?.callbacks.forEach(fn);
   };
   try {
-    const { translations } = await request({ type: 'translate', texts: items });
+    const { translations } = await request({ type: 'translate', texts: items, quality });
     const rows = [];
     const now = Date.now();
     keys.forEach((key, i) => {

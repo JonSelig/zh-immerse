@@ -13,7 +13,7 @@ let lastError = null;
 
 const translator = new PageTranslator({
   async translate(items, level, urgent) {
-    const reply = await send({ type: 'translate', items, level, urgent });
+    const reply = await send({ type: 'translate', items, level, urgent, quality: settings.quality });
     if (reply?.error) throw Object.assign(new Error(reply.error), { code: reply.code });
     return reply.graded ?? reply.translations;
   },
@@ -36,8 +36,12 @@ const chinesePage = () => /^zh\b/i.test(document.documentElement.lang);
 function apply() {
   const on = settings.enabled && !siteDisabled();
   translator.setLevel(settings.level);
-  if (on && !pageOff && !chinesePage()) translator.start();
-  else translator.stop();
+  if (on && !pageOff && !chinesePage()) {
+    translator.start();
+  } else if (translator.active) {
+    translator.stop();
+    send({ type: 'cancel' }).catch(() => {}); // drop this tab's queued text
+  }
   translator.setPinyin(settings.pinyin);
   // The hover dictionary also works on pages that are already in Chinese.
   if (on) {
@@ -57,6 +61,8 @@ browser.storage.onChanged.addListener((changes, area) => {
   // At 我的, redo the page when the word list changes (e.g. the first words
   // are added). Translations are cached, so this is quick.
   if ('myWords' in changes && settings.level === MY_LEVEL) translator.stop();
+  // Switching between Fast and Best quality redoes the page in the new mode.
+  if ('quality' in changes) translator.stop();
   apply();
 });
 

@@ -70,3 +70,12 @@ test('prioritize is allowed from pages and size-checked like translate', () => {
   assert.match(refusal({ type: 'prioritize', items: new Array(5000).fill('a') }, content, BASE), /items/);
   assert.match(refusal({ type: 'prioritize', items: ['a'.repeat(2_000_000)] }, content, BASE), /text/);
 });
+
+test('translate quality must be fast or best', () => {
+  for (const quality of [undefined, 'fast', 'best']) {
+    assert.equal(refusal({ type: 'translate', items: ['Hi'], quality }, content, BASE), null, String(quality));
+  }
+  for (const quality of ['turbo', 1, {}]) {
+    assert.match(refusal({ type: 'translate', items: ['Hi'], quality }, content, BASE), /quality/);
+  }
+});

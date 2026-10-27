@@ -1,6 +1,6 @@
 {
   "name": "zh-immerse",
-  "version": "0.1.2",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "description": "Firefox and Chrome extension that shows English web pages in Simplified Chinese, with pinyin, dictionary hover and lookup tracking.",
@@ -21,7 +21,8 @@
     "presign": "node scripts/bump-version.mjs && npm run build",
     "prelint": "npm run build",
     "bump": "node scripts/bump-version.mjs",
-    "build:hsk": "node scripts/build-hsk.mjs"
+    "build:hsk": "node scripts/build-hsk.mjs",
+    "test:chrome": "npm run build && node test/chrome-e2e.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

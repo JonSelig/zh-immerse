@@ -25,6 +25,16 @@ export class Lanes {
     }
   }
 
+  /** True while `key` is waiting (not yet taken for sending). */
+  has(key) {
+    return this.urgent.has(key) || this.ahead.has(key);
+  }
+
+  /** Drops a waiting key; false if it isn't waiting (e.g. already in flight). */
+  remove(key) {
+    return this.urgent.delete(key) || this.ahead.delete(key);
+  }
+
   /** Moves a key waiting ahead to the back of the on-screen lane. */
   promote(key) {
     if (!this.ahead.delete(key)) return false;
